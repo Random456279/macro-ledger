@@ -8,14 +8,17 @@ import { getDay, mealTotals } from './log.js';
 import { openSheet, sheetFrame, topSheetNamed, ICON } from './ui.js';
 import { foodRow } from './view-foods.js';
 
+const CHIPS = [['favorites', 'Favorites'], ['recent', 'Recent'], ['mine', 'My foods'], ['basics', 'Basics'], ['meals', 'Meals'], ['supplements', 'Supplements']];
+
 export function openAdd(slot) {
   S.addSlot = slot || slotNow(); S.addQuery = '';
   if (S.addSlot === 'supplement') S.addFilter = 'supplements'; else if (S.addFilter === 'supplements') S.addFilter = 'favorites';
-  const body = '<input class="search" id="addSearch" type="search" placeholder="Search foods and basics" autocomplete="off">'
-    + '<div class="chips scroll" id="addChips"></div>'
-    + '<div class="grid3"><button class="btn sm" data-act="scan">' + ICON.camera + ' Scan</button><button class="btn sm" data-act="describe">' + ICON.pen + ' Describe</button><button class="btn sm" data-act="new-manual">' + ICON.type + ' Manual</button></div>'
+  /* The chips are rendered once and only re-tinted afterwards, so the row never reflows under a tap. */
+  const body = '<div class="sheet-top"><input class="search" id="addSearch" type="search" placeholder="Search foods and basics" autocomplete="off">'
+    + '<div class="chips" id="addChips">' + CHIPS.map(([k, l]) => '<button class="chip" data-act="add-filter" data-f="' + k + '">' + l + '</button>').join('') + '</div></div>'
     + '<div class="list card" id="addList"></div>';
-  const el = openSheet(sheetFrame('Add to ' + SLOT_LABEL[S.addSlot], body), { name: 'add' });
+  const foot = '<button class="btn" data-act="scan">' + ICON.camera + ' Scan</button><button class="btn" data-act="describe">' + ICON.pen + ' Describe</button><button class="btn" data-act="new-manual">' + ICON.type + ' Manual</button>';
+  const el = openSheet(sheetFrame('Add to ' + SLOT_LABEL[S.addSlot], body, foot), { name: 'add' });
   $('#addSearch', el).addEventListener('input', e => { S.addQuery = e.target.value; renderAddList(); });
   renderAddList();
 }
@@ -28,8 +31,7 @@ export function mealRow(m) {
 export function renderAddList() {
   const el = topSheetNamed('add'); if (!el) return;
   const q = S.addQuery.trim();
-  const chips = [['favorites', 'Favorites'], ['recent', 'Recent'], ['mine', 'My foods'], ['basics', 'Basics'], ['meals', 'Meals'], ['supplements', 'Supplements']];
-  $('#addChips', el).innerHTML = chips.map(([k, l]) => '<button class="chip ' + (S.addFilter === k ? 'on' : '') + '" data-act="add-filter" data-f="' + k + '">' + l + '</button>').join('');
+  $('#addChips', el).querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.f === S.addFilter && !q));
   const mine = allFoodsList();
   let rows = '';
   if (q) {
@@ -40,7 +42,7 @@ export function renderAddList() {
     if (ml.length) rows += ml.map(m => mealRow(m)).join('');
   } else if (S.addFilter === 'meals') {
     const ml = Object.values(S.meals).sort((a, b) => ((b.fav ? 1 : 0) - (a.fav ? 1 : 0)) || ((b.count || 0) - (a.count || 0)));
-    rows = ml.length ? ml.map(m => mealRow(m)).join('') : '<div class="empty">No meals yet. Log a few foods, then tap "Save meal" on that slot.</div>';
+    rows = ml.length ? ml.map(m => mealRow(m)).join('') : '<div class="empty">Save your meals in Foods, then log them here in one tap.</div>';
   } else if (S.addFilter === 'basics') {
     const copies = {}; mine.forEach(f => { if (f.basicKey) copies[f.basicKey] = f; });
     rows = BASICS.map(b => foodRow(copies[b.basicKey] || b, 'pick')).join('');
@@ -57,6 +59,7 @@ export function renderAddList() {
     rows = list.length ? list.map(f => foodRow(f, 'pick')).join('') : '<div class="empty">' + (S.addFilter === 'favorites' ? 'Star a food to keep it here.' : S.addFilter === 'recent' ? 'Foods you log show up here, newest first.' : 'Nothing saved yet. Try Basics, or scan a label.') + '</div>';
   }
   $('#addList', el).innerHTML = rows;
+  const body = $('.sheet-b', el); if (body && !q) body.scrollTop = 0;
 }
 
 /* Re-render the Add sheet's list if it is open (after a save or a store update). */

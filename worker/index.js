@@ -7,7 +7,8 @@
      POST /api/ask           -> { prompt, images: [base64 jpeg], tier } -> { text, usage, model }
    The Anthropic key never leaves the Worker (set with `wrangler secret put ANTHROPIC_API_KEY`). */
 
-const KINDS = new Set(['profile', 'foods', 'meals', 'days']);
+const KINDS = new Set(['profile', 'foods', 'meals', 'days', 'workouts', 'templates', 'exercises']);
+const DATED = new Set(['days', 'workouts']);   /* ids start with yyyy-mm-dd, so a recent window is an id range */
 const MAX_DOC_BYTES = 256 * 1024;
 const PRICE = { /* USD per million tokens, for the usage estimate shown in Me */
   'claude-haiku-5-5': [0.10, 0.50], 'claude-sonnet-5-5': [2, 10], 'claude-opus-5-5': [4, 20],
@@ -67,11 +68,11 @@ export default {
 
 async function getState(env, uid, days) {
   const cutoff = ymdUTC(new Date(Date.now() - days * 86400000));
-  const rs = await env.DB.prepare("SELECT kind, id, data, updated FROM docs WHERE user_id = ? AND (kind != 'days' OR id >= ?)").bind(uid, cutoff).all();
-  const out = { profile: null, foods: {}, meals: {}, days: {}, serverTime: Date.now() };
+  const rs = await env.DB.prepare("SELECT kind, id, data, updated FROM docs WHERE user_id = ? AND (kind NOT IN ('days', 'workouts') OR id >= ?)").bind(uid, cutoff).all();
+  const out = { profile: null, foods: {}, meals: {}, days: {}, workouts: {}, templates: {}, exercises: {}, serverTime: Date.now() };
   for (const r of rs.results || []) {
     let d; try { d = JSON.parse(r.data); } catch (e) { continue; }
-    if (r.kind === 'profile') out.profile = d; else out[r.kind][r.id] = d;
+    if (r.kind === 'profile') out.profile = d; else if (out[r.kind]) out[r.kind][r.id] = d;
   }
   return out;
 }

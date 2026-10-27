@@ -57,13 +57,17 @@ async function runLocal() {
   assert(d.querySelector('#m-name'), 'meal builder open from slot');
   d.querySelector('#m-name').value = 'Egg lunch';
   d.querySelector('[data-act="m-save"]').click(); await tick(2);
-  d.querySelector('nav.tabs button[data-tab="meals"]').click(); await tick(2);
-  assert(d.querySelector('[data-act="meal-open"]'), 'meal listed in Meals tab');
+  d.querySelector('nav.tabs button[data-tab="foods"]').click(); await tick(2);
+  assert(!d.querySelector('nav.tabs button[data-tab="meals"]') && d.querySelector('nav.tabs button[data-tab="workout"]'), 'tabs are Today, Foods, Add, Workout, Me');
+  d.querySelector('[data-act="foods-sort"][data-sort="meals"]').click(); await tick(2);
+  assert(d.querySelector('[data-act="meal-open"]') && d.querySelector('[data-act="meal-new"]'), 'meal listed under the Meals chip of Foods');
   d.querySelector('[data-act="meal-open"]').click(); await tick(2);
   d.querySelector('[data-act="meal-log"]').click(); await tick(2);
   assert(d.querySelectorAll('.entry').length === 2, 'meal logged adds entry (2 entries now)');
   // foods tab, favorite + manual new food
   d.querySelector('nav.tabs button[data-tab="foods"]').click(); await tick(2);
+  assert(d.querySelector('[data-act="foods-sort"][data-sort="meals"]').className.includes('on'), 'Foods remembers the Meals chip');
+  d.querySelector('[data-act="foods-sort"][data-sort="count"]').click(); await tick(2);
   assert(d.querySelector('[data-act="food-open"]'), 'foods tab lists egg copy');
   d.querySelector('[data-act="fav"]').click(); await tick(2);
   assert(d.querySelector('.star.on'), 'favorite toggled');
@@ -138,6 +142,71 @@ async function runLocal() {
   assert(d.querySelectorAll('.entry').length === todayCount, 'copied all ' + todayCount + ' entries');
   assert(!d.querySelector('[data-act="log-stack"]'), 'copied day counts its stack as logged');
   d.querySelector('[data-act="day-today"]').click(); await tick(2);
+  // add sheet: chips stay in place when a filter is tapped, entry points live in the footer
+  d.querySelector('nav.tabs button.add').click(); await tick(5);
+  const chipsBefore = d.querySelectorAll('#addChips .chip').length;
+  d.querySelector('[data-act="add-filter"][data-f="basics"]').click(); await tick(2);
+  assert(d.querySelectorAll('#addChips .chip').length === chipsBefore && chipsBefore === 6 && d.querySelector('#addChips .chip.on').dataset.f === 'basics', 'all 6 chips still present after tapping Basics');
+  assert(d.querySelector('.sheet-f [data-act="scan"]') && d.querySelector('.sheet-f [data-act="describe"]') && d.querySelector('.sheet-f [data-act="new-manual"]'), 'Scan, Describe and Manual sit in the sheet footer');
+  d.querySelector('[data-act="add-filter"][data-f="meals"]').click(); await tick(2);
+  assert(d.querySelector('[data-act="pick-meal"]'), 'Meals chip in Add lists the saved meal');
+  d.querySelector('[data-act="close"]').click(); await tick(2);
+  // workout: blank session, add Bench Press, log 185x8, finish, save as favorite, start it tomorrow prefilled
+  d.querySelector('nav.tabs button[data-tab="workout"]').click(); await tick(2);
+  assert(d.querySelector('[data-act="w-start-blank"]'), 'workout tab offers a blank start');
+  assert(d.querySelector('nav.tabs button.add').dataset.act === 'w-add-exercise', 'Add button adds an exercise on the Workout tab');
+  d.querySelector('nav.tabs button.add').click(); await tick(5);
+  assert(d.querySelector('.card.wk') && d.querySelector('#exSearch'), 'session started and exercise picker open');
+  assert(d.querySelectorAll('[data-act="ex-pick"]').length > 40, 'picker lists the built-in library');
+  d.querySelector('[data-act="ex-group"][data-g="Legs"]').click(); await tick(2);
+  assert(d.querySelector('[data-act="ex-pick"][data-id="squat"]') && !d.querySelector('[data-act="ex-pick"][data-id="bench"]'), 'group chip filters the list');
+  d.querySelector('[data-act="ex-group"][data-g="All"]').click(); await tick(2);
+  d.querySelector('#exSearch').value = 'bench'; d.querySelector('#exSearch').dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert(d.querySelector('[data-act="ex-pick"][data-id="bench"]') && !d.querySelector('[data-act="ex-pick"][data-id="squat"]'), 'picker search filters');
+  d.querySelector('[data-act="ex-pick"][data-id="bench"]').click(); await tick(5);
+  assert(!d.querySelector('.scrim') && d.querySelectorAll('.ex').length === 1 && d.querySelectorAll('.set:not(.head)').length === 3, 'bench added with 3 blank sets');
+  const setIn = (si, f, v) => { const i = d.querySelector('.set input[data-si="' + si + '"][data-f="' + f + '"]'); i.value = String(v); i.dispatchEvent(new window.Event('input', { bubbles: true })); };
+  setIn(0, 'w', 185); setIn(0, 'r', 8); setIn(1, 'w', 185); setIn(1, 'r', 8);
+  d.querySelector('[data-act="w-remove-set"]').click(); await tick(2);
+  assert(d.querySelectorAll('.set:not(.head)').length === 2, 'remove last set leaves 2');
+  d.querySelector('[data-act="w-add-set"]').click(); await tick(2);
+  assert(d.querySelector('.set input[data-si="2"][data-f="w"]').value === '185' && d.querySelector('.set input[data-si="2"][data-f="r"]').value === '8', 'added set copies the previous one');
+  d.querySelector('[data-act="w-set-done"][data-si="0"]').click();
+  assert(d.querySelector('.set.done'), 'set marked done');
+  d.querySelector('[data-act="w-finish"]').click(); await tick(2);
+  const wkMeta = d.querySelector('.card.wk .small').textContent;
+  assert(wkMeta.startsWith('Done') && wkMeta.includes('3 sets') && wkMeta.includes('4,440 lb moved'), 'finished summary: 3 sets, 4,440 lb (' + wkMeta + ')');
+  assert(d.querySelector('[data-act="w-reopen"]') && d.querySelector('.set input').readOnly, 'finished session is read-only with Reopen');
+  d.querySelector('[data-act="w-more"]').click(); await tick(2);
+  d.querySelector('[data-act="w-save-template"]').click(); await tick(2);
+  assert(!d.querySelector('.scrim'), 'favorite saved and sheet closed');
+  d.querySelector('[data-act="w-rename"]').click(); await tick(2);
+  d.querySelector('#wn').value = 'Push day'; d.querySelector('[data-act="w-rename-save"]').click(); await tick(2);
+  assert(d.querySelector('[data-act="w-rename"]').textContent === 'Push day', 'workout renamed');
+  d.querySelector('[data-act="day"][data-n="1"]').click(); await tick(2);
+  assert(d.querySelector('[data-act="w-start-template"]') && d.querySelector('[data-act="w-repeat-last"]'), 'tomorrow offers the favorite and repeat last');
+  d.querySelector('[data-act="w-start-template"]').click(); await tick(2);
+  assert(d.querySelector('.set input[data-si="0"][data-f="w"]').value === '185' && d.querySelectorAll('.set:not(.head)').length === 3, 'favorite starts prefilled with last weights');
+  assert(d.querySelector('.ex-h .sub').textContent.startsWith('Last'), 'exercise shows last performance');
+  assert(d.querySelector('[data-act="w-open"]'), 'history lists the earlier session');
+  d.querySelector('[data-act="w-open"]').click(); await tick(2);
+  assert(d.querySelector('[data-act="w-rename"]').textContent === 'Push day', 'history row opens that day');
+  // custom exercise, on a fresh day two days out (Add on an empty day starts a session)
+  d.querySelector('[data-act="day"][data-n="1"]').click(); await tick(2);
+  d.querySelector('[data-act="day"][data-n="1"]').click(); await tick(2);
+  assert(d.querySelector('[data-act="w-start-blank"]'), 'day after tomorrow has no session yet');
+  d.querySelector('nav.tabs button.add').click(); await tick(5);
+  d.querySelector('[data-act="ex-custom"]').click(); await tick(2);
+  d.querySelector('#cx-name').value = 'Pendlay Row'; d.querySelector('#cx-group').value = 'Back';
+  d.querySelector('[data-act="ex-custom-save"]').click(); await tick(2);
+  const mine = d.querySelector('[data-act="ex-pick"][data-id^="c_"]'); assert(mine && mine.textContent.includes('Pendlay Row'), 'custom exercise appears in the picker');
+  mine.click(); await tick(5);
+  assert(Array.from(d.querySelectorAll('.ex-h .title')).some(t => t.textContent === 'Pendlay Row'), 'custom exercise added to the session');
+  d.querySelector('[data-act="w-more"]').click(); await tick(2);
+  d.querySelector('[data-act="w-delete"]').click(); await tick(2);
+  d.querySelector('[data-act="confirm-yes"]').click(); await tick(2);
+  assert(d.querySelector('[data-act="w-start-blank"]') && !d.querySelector('.card.wk'), 'workout deleted');
+  d.querySelector('[data-act="day-today"]').click(); await tick(2);
   // me tab render + targets editor
   d.querySelector('nav.tabs button[data-tab="me"]').click(); await tick(2);
   assert(d.querySelector('[data-act="edit-targets"]'), 'me tab rendered');
@@ -151,7 +220,8 @@ async function runLocal() {
   assert(d.querySelector('#ff-name'), 'describe without Claude falls back to manual form');
   // persistence
   const saved = JSON.parse(window.localStorage.getItem('macroledger.v1'));
-  assert(saved.profile && Object.keys(saved.foods).length === 5 && Object.keys(saved.days).length === 2, 'localStorage mirror has profile, 5 foods, 2 days (' + Object.keys(saved.foods).length + ')');
+  console.log('    mirror: ' + ['foods','days','workouts','templates','exercises'].map(k => k + '=' + Object.keys(saved[k] || {}).length).join(' '));
+  assert(saved.profile && Object.keys(saved.foods).length === 5 && Object.keys(saved.days).length === 2 && Object.keys(saved.workouts).length === 2 && Object.keys(saved.templates).length === 1 && Object.keys(saved.exercises).length === 1, 'localStorage mirror has profile, 5 foods, 2 days, 2 workouts, 1 favorite, 1 custom exercise');
   // simulate a new day: remove today's supplement entries + flag, reload, auto-stack should log
   const todayKey = Object.keys(saved.days).sort()[0];
   saved.days[todayKey].entries = saved.days[todayKey].entries.filter(e => e.slot !== 'supplement'); saved.days[todayKey].stackLogged = false; saved.tab = 'today';

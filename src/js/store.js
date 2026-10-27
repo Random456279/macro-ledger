@@ -6,7 +6,7 @@
      u/<uid>/foods/<id>      one food or supplement
      u/<uid>/meals/<id>      one saved meal (bundle of foodIds + qty)
      u/<uid>/days/<yyyy-mm-dd>  one logged day: { date, entries[], stackLogged } */
-import { KEY, S, hooks } from './state.js';
+import { KEY, S, hooks, COLLECTIONS } from './state.js';
 import { ymd, addDays, clone } from './util.js';
 import { toast } from './ui.js';
 import { API, apiGetState, apiPutDocs, clearKey } from './backend.js';
@@ -16,7 +16,7 @@ export const LS = {
   set(v) { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) { /* storage may be unavailable */ } },
   clear() { try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ } },
 };
-export function persistLocal() { LS.set({ profile: S.profile, foods: S.foods, meals: S.meals, days: S.days, tab: S.tab, savedAt: Date.now() }); }
+export function persistLocal() { const o = { profile: S.profile, tab: S.tab, savedAt: Date.now() }; COLLECTIONS.forEach(k => { o[k] = S[k]; }); LS.set(o); }
 
 /* One write in flight per document path; later writes to the same doc queue behind it. */
 const writeQ = new Map();
@@ -71,10 +71,12 @@ export const outboxSize = () => outbox.length;
 
 function applyState(st) {
   S.profile = st.profile || null;
-  S.foods = st.foods || {}; S.meals = st.meals || {};
-  const keep = {}; Object.keys(S.days).forEach(k => { if (!(st.days && st.days[k])) keep[k] = S.days[k]; });
-  S.days = Object.assign(keep, st.days || {});
-  Object.values(S.foods).forEach((f, i) => { if (!f.id) f.id = Object.keys(S.foods)[i]; });
+  COLLECTIONS.forEach(k => {
+    const incoming = st[k] || {};
+    if (k === 'days' || k === 'workouts') { const keep = {}; Object.keys(S[k]).forEach(id => { if (!incoming[id]) keep[id] = S[k][id]; }); S[k] = Object.assign(keep, incoming); }
+    else S[k] = incoming;
+    Object.keys(S[k]).forEach(id => { if (S[k][id] && typeof S[k][id] === 'object' && !S[k][id].id) S[k][id].id = id; });
+  });
   persistLocal();
 }
 
@@ -93,9 +95,7 @@ export async function connectApi() {
   if (serverEmpty && localHasData && !outbox.length) {
     /* first connect from a device that already has data: push it up */
     if (S.profile) enqueue('profile', null, S.profile);
-    Object.values(S.foods).forEach(f => enqueue('foods', f.id, f));
-    Object.values(S.meals).forEach(m => enqueue('meals', m.id, m));
-    Object.keys(S.days).forEach(k => enqueue('days', k, S.days[k]));
+    COLLECTIONS.forEach(k => Object.keys(S[k]).forEach(id => enqueue(k, id, S[k][id])));
     toast('Moved this phone\'s log to your account');
   } else if (!outbox.length) {
     applyState(st);
@@ -120,8 +120,8 @@ export function bootLocal() {
   const local = LS.get();
   if (!(local && typeof local === 'object')) return;
   S.localBoot = local;
-  S.profile = local.profile || null; S.foods = local.foods || {}; S.meals = local.meals || {}; S.days = local.days || {};
-  if (local.tab && local.tab !== 'me') S.tab = local.tab;
+  S.profile = local.profile || null; COLLECTIONS.forEach(k => { S[k] = (local[k] && typeof local[k] === 'object') ? local[k] : {}; });
+  if (local.tab && local.tab !== 'me' && local.tab !== 'meals') S.tab = local.tab;
 }
 
 /* Decide the storage mode once the artifact runtime has answered. */
@@ -143,34 +143,31 @@ function subscribeDb() {
     else { S.profile = null; }
     persistLocal(); hooks.render();
   }, onErr);
-  base.collection('foods').onSnapshot(qs => {
-    if (qs.metadata.fromCache && qs.empty && Object.keys(S.foods).length) return;
-    const f = {}; qs.docs.forEach(d => { f[d.id] = Object.assign(clone(d.data()), { id: d.id }); });
-    S.foods = f; persistLocal(); hooks.render(); hooks.refreshOpenLists();
-  }, onErr);
-  base.collection('meals').onSnapshot(qs => {
-    if (qs.metadata.fromCache && qs.empty && Object.keys(S.meals).length) return;
-    const m = {}; qs.docs.forEach(d => { m[d.id] = Object.assign(clone(d.data()), { id: d.id }); });
-    S.meals = m; persistLocal(); hooks.render(); hooks.refreshOpenLists();
-  }, onErr);
+  ['foods', 'meals', 'templates', 'exercises'].forEach(kind => {
+    base.collection(kind).onSnapshot(qs => {
+      if (qs.metadata.fromCache && qs.empty && Object.keys(S[kind]).length) return;
+      const m = {}; qs.docs.forEach(d => { m[d.id] = Object.assign(clone(d.data()), { id: d.id }); });
+      S[kind] = m; persistLocal(); hooks.render(); hooks.refreshOpenLists();
+    }, onErr);
+  });
   const cutoff = ymd(addDays(new Date(), -60));
-  base.collection('days').where('date', '>=', cutoff).onSnapshot(qs => {
-    if (qs.metadata.fromCache && qs.empty && Object.keys(S.days).length) return;
-    const keep = {}; Object.keys(S.days).forEach(k => { if (k < cutoff) keep[k] = S.days[k]; });
-    qs.docs.forEach(d => { keep[d.id] = clone(d.data()); });
-    S.days = keep; if (!qs.metadata.fromCache) S.daysLoaded = true; persistLocal(); hooks.render();
-  }, onErr);
+  ['days', 'workouts'].forEach(kind => {
+    base.collection(kind).where('date', '>=', cutoff).onSnapshot(qs => {
+      if (qs.metadata.fromCache && qs.empty && Object.keys(S[kind]).length) return;
+      const keep = {}; Object.keys(S[kind]).forEach(k => { if (k < cutoff) keep[k] = S[kind][k]; });
+      qs.docs.forEach(d => { keep[d.id] = Object.assign(clone(d.data()), { id: d.id }); });
+      S[kind] = keep; if (kind === 'days' && !qs.metadata.fromCache) S.daysLoaded = true; persistLocal(); hooks.render();
+    }, onErr);
+  });
 }
 
 /* First sign-in on a device that already has local data: push it up once. */
 function migrateLocal() {
   S.migrated = true;
   const L = S.localBoot;
-  S.profile = L.profile; S.foods = L.foods || {}; S.meals = L.meals || {}; S.days = L.days || {};
+  S.profile = L.profile; COLLECTIONS.forEach(k => { S[k] = L[k] || {}; });
   commit('profile', null, S.profile);
-  Object.values(S.foods).forEach(f => commit('foods', f.id, f));
-  Object.values(S.meals).forEach(m => commit('meals', m.id, m));
-  Object.keys(S.days).forEach(k => commit('days', k, S.days[k]));
+  COLLECTIONS.forEach(k => Object.keys(S[k]).forEach(id => commit(k, id, S[k][id])));
   toast('Moved your local log into your account');
 }
 
@@ -180,7 +177,7 @@ export async function loadDay(key) {
   if (S.mode === 'db') {
     try { const snap = await S.base.collection('days').doc(key).get(); if (snap.exists) { S.days[key] = clone(snap.data()); persistLocal(); hooks.render(); } } catch (e) { /* ignore */ }
   } else if (S.mode === 'api') {
-    try { const st = await apiGetState(400); if (st.days && st.days[key]) { S.days[key] = st.days[key]; persistLocal(); hooks.render(); } } catch (e) { /* offline */ }
+    try { const st = await apiGetState(400); if (st.days && st.days[key]) { S.days[key] = st.days[key]; } Object.keys(st.workouts || {}).forEach(id => { if (id.startsWith(key)) S.workouts[id] = st.workouts[id]; }); persistLocal(); hooks.render(); } catch (e) { /* offline */ }
   }
 }
 
@@ -189,8 +186,6 @@ export function importBackup(obj) {
   if (!obj || typeof obj !== 'object') throw new Error('Not a backup');
   let n = 0;
   if (obj.profile && typeof obj.profile === 'object') { S.profile = obj.profile; commit('profile', null, S.profile); n++; }
-  Object.values(obj.foods || {}).forEach(f => { if (f && f.id) { S.foods[f.id] = f; commit('foods', f.id, f); n++; } });
-  Object.values(obj.meals || {}).forEach(m => { if (m && m.id) { S.meals[m.id] = m; commit('meals', m.id, m); n++; } });
-  Object.keys(obj.days || {}).forEach(k => { const d = obj.days[k]; if (d && typeof d === 'object') { S.days[k] = Object.assign({ date: k }, d); commit('days', k, S.days[k]); n++; } });
+  COLLECTIONS.forEach(k => Object.keys(obj[k] || {}).forEach(id => { const d = obj[k][id]; if (d && typeof d === 'object') { S[k][id] = Object.assign({ id }, d, k === 'days' ? { date: d.date || id } : {}); commit(k, id, S[k][id]); n++; } }));
   return n;
 }

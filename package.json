@@ -1,6 +1,6 @@
 {
   "name": "macro-ledger",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "description": "Macro Ledger: an iPhone macro and nutrient tracker published as a claude.ai artifact.",
   "type": "module",

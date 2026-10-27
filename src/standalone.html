@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Macro Ledger</title>
+<title>TARE</title>
 <meta name="description" content="Calories, macros and nutrients, logged by scanning labels or describing meals.">
 <meta name="theme-color" content="#f4f2ed">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Macro Ledger">
+<meta name="apple-mobile-web-app-title" content="TARE">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
@@ -22,7 +22,7 @@ img { max-width: 100%; }
 [hidden] { display: none !important; }
 /* Standalone runs edge to edge under the status bar and home indicator; pad the fixed chrome, not the page. */
 header.top { padding-top: calc(18px + env(safe-area-inset-top, 0px)) !important; }
-nav.tabs { padding-bottom: calc(2px + env(safe-area-inset-bottom, 0px)) !important; }
+nav.tabs { padding-bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) - 10px)) !important; }
 .sheet { padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)) !important; }
 #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)) !important; }
 </style>

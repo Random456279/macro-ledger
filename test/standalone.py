@@ -83,6 +83,19 @@ async def main():
             ok(await pg.input_value('#n-omega3') == '1100', 'omega-3 column filled from proxy reply')
             await pg.click('[data-act="ff-save"]'); await pg.wait_for_timeout(900)
             st, body = http('GET', '/api/me'); ok(body['usage']['calls'] == 1, 'usage recorded (1 call)')
+            # a workout: start, add bench, type a set, finish, save as favorite; all of it should reach the server
+            await pg.click('.sheet .closex'); await pg.wait_for_timeout(250)
+            await pg.click('nav.tabs button[data-tab="workout"]'); await pg.wait_for_timeout(200)
+            await pg.click('nav.tabs button.add'); await pg.wait_for_timeout(300)
+            await pg.click('[data-act="ex-pick"][data-id="bench"]'); await pg.wait_for_timeout(300)
+            await pg.fill('.set input[data-si="0"][data-f="w"]', '185'); await pg.fill('.set input[data-si="0"][data-f="r"]', '8')
+            await pg.click('[data-act="w-finish"]'); await pg.wait_for_timeout(300)
+            await pg.click('[data-act="w-more"]'); await pg.wait_for_timeout(200)
+            await pg.click('[data-act="w-save-template"]'); await pg.wait_for_timeout(900)
+            st, body = http('GET', '/api/state?days=30')
+            ok(len(body['workouts']) == 1 and len(body['templates']) == 1, 'server has the workout and the favorite')
+            wk = list(body['workouts'].values())[0]
+            ok(wk['items'][0]['sets'][0]['w'] == 185 and wk['items'][0]['sets'][0]['r'] == 8 and wk['finished'], 'workout doc carries the typed set')
             # persistence: clear the browser entirely, reopen with the key, data comes from the server
             await ctx.close()
             ctx = await b.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True)
@@ -91,6 +104,9 @@ async def main():
             await pg.goto(BASE + '/'); await pg.wait_for_timeout(500)
             await pg.fill('#k-key', KEY); await pg.click('[data-act="connect-go"]'); await pg.wait_for_timeout(1200)
             ok(await pg.locator('.entry').count() == 1, 'fresh browser + key: the logged day came back from the server')
+            await pg.click('nav.tabs button[data-tab="workout"]'); await pg.wait_for_timeout(300)
+            ok(await pg.locator('.card.wk').count() == 1 and await pg.input_value('.set input[data-si="0"][data-f="w"]') == '185', 'fresh browser: the workout came back too')
+            await pg.click('nav.tabs button[data-tab="today"]'); await pg.wait_for_timeout(200)
             # offline outbox: block the API, log, then unblock and confirm it synced
             await pg.route('**/api/**', lambda r: r.abort())
             await pg.click('nav.tabs button.add'); await pg.wait_for_timeout(300)

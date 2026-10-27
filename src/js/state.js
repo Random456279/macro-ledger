@@ -3,8 +3,11 @@
    importing the UI (main.js fills them in at boot). */
 import { ymd } from './util.js';
 
-export const VERSION = '0.6.0';
+export const VERSION = '0.7.0';
+export const APP_NAME = 'TARE';               /* what the UI calls itself; the code and repo stay macro-ledger */
 export const KEY = 'macroledger.v1';          /* localStorage mirror key */
+/* Document collections mirrored between S, localStorage and the store. 'days' and 'workouts' are keyed by date. */
+export const COLLECTIONS = ['foods', 'meals', 'days', 'workouts', 'templates', 'exercises'];
 
 export const SLOTS = [
   { k: 'breakfast', label: 'Breakfast' }, { k: 'lunch', label: 'Lunch' }, { k: 'dinner', label: 'Dinner' },
@@ -34,13 +37,14 @@ export const slotNow = () => { const h = new Date().getHours(); if (h >= 4 && h 
 export const S = {
   ready: false, tab: 'today', dayKey: ymd(new Date()), fullOpen: false,
   /* data (mirrors the store) */
-  profile: null, profileDraft: null, foods: {}, meals: {}, days: {},
+  profile: null, profileDraft: null, foods: {}, meals: {}, days: {}, workouts: {}, templates: {}, exercises: {},
   /* store plumbing */
   mode: 'pending', uid: null, base: null, pending: [], localBoot: null, migrated: false, daysLoaded: false, autoDone: {},
   /* AI availability */
   ai: { sample: null, images: false },
   /* UI */
   sheets: [], addFilter: 'favorites', addSlot: null, addQuery: '', foodsQuery: '', foodsSort: 'count',
+  exQuery: '', exGroup: 'All',
 };
 
 /* Filled in by main.js. Data modules call these instead of importing the UI. */

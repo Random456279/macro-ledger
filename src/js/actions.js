@@ -1,8 +1,8 @@
 /* The action registry. Every tappable element carries data-act="<name>" (plus data-* args);
    main.js routes clicks here. A new feature adds its handlers to this map (or exports its own
    map that main.js merges), never its own click listeners on document. */
-import { S, SLOT_LABEL, slotNow, hooks } from './state.js';
-import { $, $$, num, numOrNull, mkid, ymd, addDays, parseYmd, shortDate } from './util.js';
+import { S, SLOT_LABEL, slotNow, hooks, COLLECTIONS } from './state.js';
+import { $, $$, esc, num, numOrNull, mkid, ymd, addDays, parseYmd, shortDate } from './util.js';
 import { NUTR } from './nutrients.js';
 import { calcTargets, profileComplete, activeTargets } from './targets.js';
 import { commit, persistLocal, loadDay, LS } from './store.js';
@@ -18,12 +18,22 @@ import { openDescribe, submitDescribe } from './ai.js';
 import { aiAvailable, imagesAvailable, saveKey, clearKey, apiMe, API } from './backend.js';
 import { connectApi, importBackup, flushOutbox } from './store.js';
 import { readProfileForm } from './view-me.js';
+import { dayWorkouts, startWorkout, startFromTemplate, repeatLast, addExercise, removeExercise, addSet, removeSet, toggleDone, finishWorkout, reopenWorkout, renameWorkout, saveTemplate, deleteTemplate, deleteWorkout, addCustomExercise } from './workouts.js';
+import { findExercise } from './exercises.js';
+import { openExercisePicker, renderExerciseList, openCustomExercise } from './sheet-exercise.js';
+
+/* The session the Workout tab is acting on: the (first) session of the selected day. */
+function currentWorkout(create) {
+  const list = dayWorkouts(S.dayKey);
+  if (list.length) return list[0];
+  return create ? startWorkout(S.dayKey) : null;
+}
 
 const render = () => hooks.render();
 
 export const ACT = {
   /* navigation */
-  tab(b) { S.tab = b.dataset.tab; if (S.tab === 'today') S.dayKey = ymd(new Date()); persistLocal(); render(); $('#main').scrollTop = 0; },
+  tab(b) { const was = S.tab; S.tab = b.dataset.tab; if ((S.tab === 'today' || S.tab === 'workout') && !(was === 'today' || was === 'workout')) S.dayKey = ymd(new Date()); persistLocal(); render(); $('#main').scrollTop = 0; },
   day(b) { S.dayKey = ymd(addDays(parseYmd(S.dayKey), Number(b.dataset.n))); loadDay(S.dayKey); render(); },
   'day-today'() { S.dayKey = ymd(new Date()); render(); },
   'toggle-full'() { toggleDetails(); },
@@ -104,12 +114,53 @@ export const ACT = {
   'toggle-careful'() { S.profile.careful = !S.profile.careful; commit('profile', null, S.profile); render(); },
   'toggle-autostack'() { S.profile.autoStack = !S.profile.autoStack; commit('profile', null, S.profile); render(); },
   export() {
-    const data = JSON.stringify({ exported: new Date().toISOString(), profile: S.profile, foods: S.foods, meals: S.meals, days: S.days });
+    const dump = { exported: new Date().toISOString(), profile: S.profile }; COLLECTIONS.forEach(k => { dump[k] = S[k]; });
+    const data = JSON.stringify(dump);
     const done = () => toast('Backup copied to clipboard');
     const fallback = () => { const el = openSheet(sheetFrame('Backup', '<p class="small muted">Copy this text and keep it somewhere safe.</p><textarea id="bk" style="width:100%;min-height:220px;font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-radius:8px;padding:8px"></textarea>'), { name: 'backup' }); const ta = $('#bk', el); ta.value = data; ta.focus(); ta.select(); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(data).then(done).catch(fallback); else fallback();
   },
   reset() { openConfirm('Reset everything?', 'This deletes your profile, foods, meals and every logged day from this app. There is no undo.', 'Delete it all', doReset); },
+
+  /* workouts */
+  'w-start-blank'() { startWorkout(S.dayKey); render(); },
+  'w-start-template'(b) { const t = S.templates[b.dataset.id]; if (!t) return; startFromTemplate(S.dayKey, t); render(); toast('Started ' + t.name); },
+  'w-repeat-last'() { if (repeatLast(S.dayKey)) render(); },
+  'w-add-exercise'() { if (S.tab !== 'workout') { S.tab = 'workout'; S.dayKey = ymd(new Date()); render(); } const w = currentWorkout(true); render(); openExercisePicker(w.id); },
+  'ex-group'(b) { S.exGroup = b.dataset.g; renderExerciseList(); },
+  'ex-pick'(b) {
+    const el = topSheetNamed('expick'); const w = S.workouts[el && el._workoutId] || currentWorkout(true); const ex = findExercise(b.dataset.id); if (!ex) return;
+    addExercise(w, ex); closeAllSheets(); render(); toast('Added ' + ex.name);
+    const cards = $$('.ex', $('#main')); const last = cards[cards.length - 1]; if (last && last.scrollIntoView) last.scrollIntoView({ block: 'center' });
+  },
+  'ex-custom'() { openCustomExercise(); },
+  'ex-custom-save'() {
+    const el = topSheet(); const name = $('#cx-name', el).value.trim(); if (!name) { toast('Name it first'); return; }
+    const ex = addCustomExercise(name, $('#cx-group', el).value, $('#cx-type', el).value);
+    closeSheet(); const pick = topSheetNamed('expick'); if (pick) { S.exQuery = ex.name; $('#exSearch', pick).value = ex.name; renderExerciseList(); } toast('Added to your exercises');
+  },
+  'w-add-set'(b) { const w = currentWorkout(false); if (!w) return; addSet(w, Number(b.dataset.ii)); render(); },
+  'w-remove-set'(b) { const w = currentWorkout(false); if (!w) return; removeSet(w, Number(b.dataset.ii), Number(b.dataset.si)); render(); },
+  'w-set-done'(b) { const w = currentWorkout(false); if (!w) return; toggleDone(w, Number(b.dataset.ii), Number(b.dataset.si)); const row = b.closest('.set'); if (row) row.classList.toggle('done'); b.classList.toggle('on'); },
+  'w-remove-ex'(b) { const w = currentWorkout(false); if (!w) return; const it = w.items[Number(b.dataset.ii)]; openConfirm('Remove ' + (it ? it.name : 'exercise') + '?', 'Its sets for this session go with it.', 'Remove', () => { removeExercise(w, Number(b.dataset.ii)); render(); }); },
+  'w-finish'() { const w = currentWorkout(false); if (!w) return; finishWorkout(w); render(); toast('Workout saved'); },
+  'w-reopen'() { const w = currentWorkout(false); if (!w) return; reopenWorkout(w); render(); },
+  'w-rename'() {
+    const w = currentWorkout(false); if (!w) return;
+    const el = openSheet(sheetFrame('Workout name', '<div class="field"><label>Name</label><input id="wn" type="text" value="' + esc(w.name) + '" placeholder="Push day"></div>', '<button class="btn primary" data-act="w-rename-save">Save</button>'), { name: 'wname' });
+    setTimeout(() => { const i = $('#wn', el); if (i) { i.focus(); i.select(); } }, 60);
+  },
+  'w-rename-save'() { const w = currentWorkout(false); const el = topSheet(); if (w) renameWorkout(w, $('#wn', el).value); closeSheet(); render(); },
+  'w-more'() {
+    const w = currentWorkout(false); if (!w) return;
+    const body = '<div class="stack tight"><button class="btn block" data-act="w-save-template">Save as a favorite workout</button><button class="btn block danger" data-act="w-delete">Delete this workout</button></div>'
+      + (Object.keys(S.templates).length ? '<div><div class="label" style="margin:14px 0 6px">Favorites</div><div class="list">' + Object.values(S.templates).map(t => '<div class="row"><div class="main"><div class="title">' + esc(t.name) + '</div><div class="sub">' + t.items.map(i => i.name).join(', ') + '</div></div><button class="closex" data-act="t-delete" data-id="' + esc(t.id) + '" aria-label="Delete favorite">×</button></div>').join('') + '</div></div>' : '');
+    openSheet(sheetFrame(w.name, body), { name: 'wmenu' });
+  },
+  'w-save-template'() { const w = currentWorkout(false); if (!w) return; if (!w.items.length) { toast('Add exercises first'); return; } closeSheet(); const t = saveTemplate(w, w.name); render(); toast('Saved favorite: ' + t.name); },
+  't-delete'(b) { const id = b.dataset.id; deleteTemplate(id); closeSheet(); render(); toast('Favorite removed'); },
+  'w-delete'() { const w = currentWorkout(false); if (!w) return; closeSheet(); openConfirm('Delete this workout?', 'Everything logged in it goes too.', 'Delete', () => { deleteWorkout(w.id); render(); toast('Deleted'); }); },
+  'w-open'(b) { S.dayKey = b.dataset.date; S.tab = 'workout'; render(); $('#main').scrollTop = 0; },
 
   /* standalone: device key and backups */
   connect() { openKeySheet(); },
@@ -125,14 +176,14 @@ export const ACT = {
   'import-go'() {
     const el = topSheet(); let obj;
     try { obj = JSON.parse($('#imp-text', el).value); } catch (e) { toast('That is not valid backup text'); return; }
-    let n; try { n = importBackup(obj); } catch (e) { toast('That is not a Macro Ledger backup'); return; }
+    let n; try { n = importBackup(obj); } catch (e) { toast('That is not a TARE backup'); return; }
     closeSheet(); render(); flushOutbox(); toast('Imported ' + n + ' record' + (n === 1 ? '' : 's'));
   },
 };
 
 export function doReset() {
-  const foods = Object.keys(S.foods), meals = Object.keys(S.meals), days = Object.keys(S.days);
-  foods.forEach(id => commit('foods', id, null)); meals.forEach(id => commit('meals', id, null)); days.forEach(k => commit('days', k, null)); commit('profile', null, null);
-  S.profile = null; S.foods = {}; S.meals = {}; S.days = {}; S.profileDraft = null; S.migrated = true; S.localBoot = null;
+  COLLECTIONS.forEach(k => { Object.keys(S[k]).forEach(id => commit(k, id, null)); S[k] = {}; });
+  commit('profile', null, null);
+  S.profile = null; S.profileDraft = null; S.migrated = true; S.localBoot = null;
   LS.clear(); S.tab = 'today'; closeAllSheets(); render(); toast('Reset');
 }

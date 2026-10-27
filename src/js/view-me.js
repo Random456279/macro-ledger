@@ -63,7 +63,7 @@ export function targetsPreviewHtml(p) {
     + '<div class="tp-row"><span class="muted">Maintenance</span><span class="muted num">' + fmt(T.tdee) + ' cal (BMR ' + fmt(T.bmr) + ')</span></div></div>';
 }
 export function onboardingHtml(p) {
-  return '<div class="onb-hero"><h2>Your numbers, your food.</h2><p>Enter your stats once. Macro Ledger sets daily calorie and macro targets; you log against them by scanning labels, describing meals, or tapping favorites.</p></div>'
+  return '<div class="onb-hero"><h2>Your numbers, your food.</h2><p>Enter your stats once. TARE sets daily calorie and macro targets; you log against them by scanning labels, describing meals, or tapping favorites.</p></div>'
     + '<div class="card">' + profileFormHtml(p) + '</div><div id="targets-preview">' + targetsPreviewHtml(p) + '</div>'
     + '<button class="btn primary block" id="onb-go" data-act="onb-save" disabled>Start tracking</button>'
     + '<p class="small muted">Targets use Mifflin-St Jeor (or Katch-McArdle with body fat), an activity multiplier, and about 500 calories per pound per week of change. You can override any number later in Me.</p>';

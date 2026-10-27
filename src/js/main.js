@@ -1,5 +1,5 @@
 /* Entry point: render loop, event routing, boot. Keep this file small; features live in their modules. */
-import { S, hooks } from './state.js';
+import { S, hooks, APP_NAME } from './state.js';
 import { $, $$, esc, ymd, niceDate, shortDate } from './util.js';
 import { bootLocal, connectStore, connectApi, refreshFromApi, flushOutbox, flushPending } from './store.js';
 import { isStandalone, loadKey } from './backend.js';
@@ -9,10 +9,11 @@ import { maybeAutoLogStack } from './log.js';
 import { initAI, scanLabel } from './ai.js';
 import { todayHtml } from './view-today.js';
 import { foodsHtml, foodsListHtml } from './view-foods.js';
-import { mealsHtml } from './view-meals.js';
+import { workoutHtml } from './view-workout.js';
 import { meHtml, onboardingHtml, profileFormUpdate, profileGoalChanged } from './view-me.js';
 import { setFormKind } from './sheet-food.js';
 import { refreshOpenLists } from './sheet-add.js';
+import { updateSet, flushWorkoutSaves } from './workouts.js';
 import { ACT } from './actions.js';
 
 export function render() {
@@ -27,31 +28,33 @@ export function render() {
   tabs.hidden = false; renderTabs();
   if (S.tab === 'today') { maybeAutoLogStack(); main.innerHTML = todayHtml(); }
   else if (S.tab === 'foods') main.innerHTML = foodsHtml();
-  else if (S.tab === 'meals') main.innerHTML = mealsHtml();
+  else if (S.tab === 'workout') main.innerHTML = workoutHtml();
   else if (S.tab === 'me') { main.innerHTML = meHtml(); profileFormUpdate(main); }
+  else { S.tab = 'today'; main.innerHTML = todayHtml(); }
 }
 function renderHeader() {
   const h = $('#hdr');
-  if (!S.profile) { h.innerHTML = '<div><div class="eyebrow">Macro Ledger</div><h1>Welcome</h1></div>'; return; }
-  const titles = { today: 'Today', foods: 'Foods', meals: 'Meals', me: 'Me' };
+  if (!S.profile) { h.innerHTML = '<div><div class="eyebrow">' + esc(APP_NAME) + '</div><h1>Welcome</h1></div>'; return; }
+  const titles = { today: 'Today', foods: 'Foods', workout: 'Workout', me: 'Me' };
+  const dated = S.tab === 'today' || S.tab === 'workout';
+  const isToday = S.dayKey === ymd(new Date());
   let right = '';
-  if (S.tab === 'today') {
-    const isToday = S.dayKey === ymd(new Date());
+  if (dated) {
     right = '<div class="datenav"><button class="iconbtn" data-act="day" data-n="-1" aria-label="Previous day">' + ICON.chevL + '</button>'
       + '<button class="link dlabel num ' + (isToday ? 'today' : '') + '" data-act="day-today">' + (isToday ? 'Today' : shortDate(S.dayKey)) + '</button>'
       + '<button class="iconbtn" data-act="day" data-n="1" aria-label="Next day">' + ICON.chevR + '</button></div>';
   }
-  const isToday = S.dayKey === ymd(new Date());
-  const eyebrow = S.tab === 'today' ? (isToday ? niceDate(S.dayKey) : 'Macro Ledger') : 'Macro Ledger';
-  const title = S.tab === 'today' && !isToday ? niceDate(S.dayKey) : titles[S.tab];
+  const eyebrow = dated && isToday ? niceDate(S.dayKey) : APP_NAME;
+  const title = dated && !isToday ? niceDate(S.dayKey) : titles[S.tab] || 'Today';
   h.innerHTML = '<div><div class="eyebrow">' + esc(eyebrow) + '</div><h1>' + esc(title) + '</h1></div>' + right;
 }
 function renderTabs() {
   const t = $('#tabs');
   const b = (k, label, icon) => '<button data-act="tab" data-tab="' + k + '" class="' + (S.tab === k ? 'on' : '') + '">' + icon + label + '</button>';
+  const addAct = S.tab === 'workout' ? 'w-add-exercise' : 'add';
   t.innerHTML = b('today', 'Today', ICON.today) + b('foods', 'Foods', ICON.foods)
-    + '<button class="add" data-act="add" aria-label="Add food"><span class="plus">' + ICON.plus + '</span>Add</button>'
-    + b('meals', 'Meals', ICON.meals) + b('me', 'Me', ICON.me);
+    + '<button class="add" data-act="' + addAct + '" aria-label="' + (S.tab === 'workout' ? 'Add exercise' : 'Add food') + '"><span class="plus">' + ICON.plus + '</span>Add</button>'
+    + b('workout', 'Workout', ICON.workout) + b('me', 'Me', ICON.me);
 }
 
 hooks.render = render;
@@ -76,8 +79,11 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.sheets.l
 $('#photoInput').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) scanLabel(f); });
 $('#main').addEventListener('input', e => {
   if (e.target.id === 'foodsSearch') { S.foodsQuery = e.target.value; const list = $('#foodsList'); if (list) list.innerHTML = foodsListHtml(); return; }
+  const si = e.target.closest('input[data-w]');
+  if (si) { const w = S.workouts[si.dataset.w]; if (w) updateSet(w, Number(si.dataset.ii), Number(si.dataset.si), si.dataset.f, si.value); return; }
   if (e.target.closest('#f-age,#f-hft,#f-hin,#f-wt,#f-bf,#f-act')) profileFormUpdate($('#main'));
 });
+window.addEventListener('pagehide', flushWorkoutSaves);
 $('#main').addEventListener('change', e => { if (e.target.closest('#f-hft,#f-hin,#f-act')) profileFormUpdate($('#main')); });
 
 (async function boot() {

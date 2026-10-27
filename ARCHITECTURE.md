@@ -76,16 +76,19 @@ request a re-render without importing the UI.
 | 0 | `nutrients.js` | `NUTR` table (keys, labels, units, ext flag), `fullN/blankN/scaled` | nothing |
 | 1 | `state.js` | `S` (all mutable state), `VERSION`, slots, units, activity levels, `hooks` | util |
 | 1 | `basics.js` | built-in generic foods | nutrients |
+| 1 | `exercises.js` | built-in exercise library, groups, search, `SET_FIELDS` per exercise type | state |
 | 2 | `targets.js` | `calcTargets`, `profileComplete`, `activeTargets` | util, state |
 | 2 | `ui.js` | toast, sheet stack, icons, star control | util, state |
 | 2 | `backend.js` | which backend, API client, device key, image downscale, `askJSON` | state |
 | 3 | `store.js` | localStorage mirror, `commit`, artifact db subscriptions, API mode with outbox, import | state, util, ui, backend |
 | 4 | `foods.js` | My Foods and Meals CRUD, search, sort, Basics materialization, stack list | state, store, basics, util |
 | 5 | `log.js` | day docs, totals, entries, log/edit/remove/copy, stack logging and auto-log | state, store, nutrients, util, foods, ui |
+| 5 | `workouts.js` | sessions, sets (debounced save), finish/reopen, favorites (templates), last performance, custom exercises | state, store, util, exercises, ui |
 | 6 | `sheet-food.js` | food form (new, edit, AI-filled) read/write | util, nutrients, ui |
 | 6 | `sheet-misc.js` | targets editor, confirm sheet | util, nutrients, targets, ui |
-| 6 | `view-foods.js` | Foods tab, shared `foodRow` | state, util, foods, ui |
-| 6 | `view-meals.js` | Meals tab | state, util, log |
+| 6 | `view-foods.js` | Foods tab (foods, supplements and saved meals under chips), shared `foodRow` | state, util, foods, log, ui |
+| 6 | `view-workout.js` | Workout tab: start card, session card with set grid, history | state, util, exercises, workouts |
+| 6 | `sheet-exercise.js` | exercise picker (search, group chips) and custom-exercise sheet | util, state, exercises, ui, workouts |
 | 6 | `view-today.js` | Today tab, full label, entry rows | state, util, nutrients, targets, log, foods |
 | 6 | `view-me.js` | profile form, onboarding, Me tab | state, util, nutrients, targets, foods |
 | 7 | `ai.js` | prompts, coercion, label scan, describe sheet and estimate, `initAI` | state, nutrients, util, ui, sheet-food |
@@ -96,8 +99,7 @@ request a re-render without importing the UI.
 | 9 | `main.js` | `render`, header and tabs, event routing, boot | everything |
 
 Planned modules (not yet written; create them at layer 7 and register in `actions.js`/`main.js`):
-`suggest.js` (what closes today's gap), `trends.js` (weight log, rolling averages, weekly review),
-`workouts.js` (training log and day-type targets).
+`suggest.js` (what closes today's gap), `trends.js` (weight log, rolling averages, weekly review).
 
 ## Conventions
 
@@ -108,8 +110,10 @@ Planned modules (not yet written; create them at layer 7 and register in `action
   `data-*` arguments; handlers live in `actions.js` and receive `(button, event)`. Segmented controls
   (`.seg button`) toggle themselves before the registry runs. Do not add `document`-level listeners
   elsewhere; per-sheet listeners on inputs are fine.
-- **Writes.** Every persisted change goes through `store.commit(kind, id, data)` with kind `profile`,
-  `foods`, `meals` or `days`; `data === null` deletes. `commit` also refreshes the localStorage mirror.
+- **Writes.** Every persisted change goes through `store.commit(kind, id, data)` with kind `profile` or one of
+  `state.COLLECTIONS` (`foods`, `meals`, `days`, `workouts`, `templates`, `exercises`); `data === null` deletes.
+  `commit` also refreshes the localStorage mirror. Adding a collection means adding it to `COLLECTIONS`, to
+  `KINDS` in `worker/index.js` (and `DATED` if its ids start with a date), and to the artifact subscriptions in `store.js`.
   Store snapshots are frozen: clone before editing (the store layer already does).
 - **Nutrients.** Always work with full vectors from `fullN()`; `null` means unknown and must stay null
   (never 0) so the full label can tell "none" from "not listed". Add a nutrient by appending to `NUTR`
@@ -117,7 +121,9 @@ Planned modules (not yet written; create them at layer 7 and register in `action
 - **AI.** The label reader accepts a facts-panel photo (basis 'label', exact) or a front-of-package photo (basis 'knowledge': product identified, values from the model's memory, confidence capped at medium, flagged in the form). The page cannot reach the web, so 'knowledge' is recall, never a lookup. Prompts ask for a strict JSON shape (`ai.JSON_SHAPE`) and go through `coerceAI` before anything
   touches the form. Never trust a field's type. Fast tier by default; Careful mode uses the default tier.
   Every AI result lands in the food form for the user to confirm; nothing is logged without a tap.
-- **Copy.** Plain, short, no exclamation marks. No em dashes anywhere in UI text or comments.
+- **Copy.** Plain, short, no exclamation marks. No em dashes anywhere in UI text or comments. The app is
+  called TARE everywhere the user can see it (`state.APP_NAME`, titles, manifest); `macro-ledger` stays the
+  name of the repo, package, Worker and storage keys.
 - **Style.** Light theme only (deliberate). Tokens live at the top of `src/css/app.css`; new components use
   the existing tokens and classes (`.btn`, `.chip`, `.seg`, `.row`, `.sheet`, `.note`, `.kv`).
 - **Mobile.** 390px wide is the design width. Anything new gets checked in `npm run shots` or a real phone.
@@ -125,7 +131,7 @@ Planned modules (not yet written; create them at layer 7 and register in `action
 ## Data model
 
 All documents are plain JSON under the viewer's root `u/<uid>` in the artifact db (and mirrored in
-localStorage under `macroledger.v1` as `{profile, foods, meals, days, tab}`).
+localStorage under `macroledger.v1` as `{profile, foods, meals, days, workouts, templates, exercises, tab}`).
 
 ```
 profile  (u/<uid>)
@@ -149,6 +155,17 @@ day  (u/<uid>/days/<yyyy-mm-dd>)
   entry: id, foodId, name, brand, restaurant, servingLabel, servingGrams, kind, qty (servings),
          amount {v, unit 'g'|'oz'|'lb'}|null (what was typed), n (per-serving vector frozen at log time), extras (copied from the food),
          slot 'breakfast'|'lunch'|'dinner'|'snack'|'supplement', t, mealId?
+
+workout  (u/<uid>/workouts/<yyyy-mm-dd>_<rand>)   id starts with the date so a date range is an id range
+  id, date, name, started, finished|null, templateId|null, note,
+  items [{id, exId, name, type 'weight'|'bodyweight'|'time'|'cardio', sets [{w, r, s, m, d, done}], note}]
+  (w lb, r reps, s seconds, m minutes, d miles; null = not entered)
+
+template  (u/<uid>/templates/<id>)   a favorite workout
+  id, name, items [{exId, name, type, sets (count)}], count, last, created
+
+exercise  (u/<uid>/exercises/<c_id>)   a custom exercise; built-ins live in exercises.js
+  id, name, group, type, created
 ```
 
 Entries copy the food's nutrients at log time so editing a food never rewrites history. Days older than
