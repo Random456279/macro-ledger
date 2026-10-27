@@ -41,7 +41,7 @@ async function runLocal() {
   const eaten = d.querySelector('.kcal-meta b').textContent; assert(eaten.startsWith('144'), 'eaten shows 144 for 2 eggs (got ' + eaten + ')');
   // full label toggle
   d.querySelector('[data-act="toggle-full"]').click(); await tick(2);
-  assert(d.querySelectorAll('.nf-row').length === 20, 'full label has 20 rows (got ' + d.querySelectorAll('.nf-row').length + ')');
+  assert(d.querySelectorAll('.nf-row').length === 29, 'full label has 29 rows (got ' + d.querySelectorAll('.nf-row').length + ')');
   // edit entry: change qty to 1, slot to lunch
   d.querySelector('.entry').click(); await tick(2);
   d.querySelector('#qtyInput').value = '1';
@@ -180,7 +180,8 @@ async function runDb() {
   const user = { id: async () => 'u_test', isOwner: async () => true, canEdit: async () => true, can: async () => true };
   const calls = [];
   const sample = Object.assign(async (input, opts) => ({ text: 'x', truncated: false, modelTierApplied: 'quick' }), {
-    json: async (input, opts) => { calls.push({ input: input.slice(0, 40), img: !!(opts && opts.images), tier: opts && opts.modelTier }); if (calls.length === 3) return { kind: 'supplement', name: 'Multivitamin', brand: 'Acme', servingLabel: '1 tablet', servingGrams: null, perServing: { vitD: 25, vitA: 900, vitC: 90, vitB12: 6, magnesium: 50, zinc: 11, calcium: 200, iron: 18 }, confidence: 'high', notes: 'also 50 mg omega-3' }; return { kind: 'food', name: 'Scanned Bar', brand: 'Acme', servingLabel: '1 bar (45g)', servingGrams: 45, perServing: { kcal: 210, protein: 12, carbs: 20, fat: 9, fiber: 3, sugar: 8, addedSugar: 6, satFat: 2.5, transFat: 0, cholesterol: 5, sodium: 150, potassium: 120, calcium: 40, iron: 1.2, vitD: 0 }, confidence: 'high', notes: 'clear label' }; },
+    json: async (input, opts) => { calls.push({ input: input.slice(0, 40), img: !!(opts && opts.images), tier: opts && opts.modelTier }); if (calls.length === 4) return { kind: 'supplement', basis: 'knowledge', name: 'Ultimate Omega 2X', brand: 'Nordic Naturals', servingLabel: '2 soft gels', servingGrams: null, perServing: { kcal: 20, fat: 2, omega3: 2150 }, extras: [{ name: 'EPA', amount: 1125, unit: 'mg' }, { name: 'DHA', amount: 875, unit: 'mg' }], confidence: 'high', notes: 'values from memory; verify lemon vs unflavored' };
+      if (calls.length === 3) return { kind: 'supplement', name: 'Multivitamin', brand: 'Acme', servingLabel: '1 tablet', servingGrams: null, perServing: { vitD: 25, vitA: 900, vitC: 90, vitB12: 6, magnesium: 50, zinc: 11, calcium: 200, iron: 18 }, confidence: 'high', notes: 'also 50 mg omega-3' }; return { kind: 'food', name: 'Scanned Bar', brand: 'Acme', servingLabel: '1 bar (45g)', servingGrams: 45, perServing: { kcal: 210, protein: 12, carbs: 20, fat: 9, fiber: 3, sugar: 8, addedSugar: 6, satFat: 2.5, transFat: 0, cholesterol: 5, sodium: 150, potassium: 120, calcium: 40, iron: 1.2, vitD: 0 }, confidence: 'high', notes: 'clear label' }; },
     limits: async () => ({ maxPromptBytes: 262144, images: { maxCount: 4, maxInputBytes: 20e6, mediaTypes: ['image/jpeg', 'image/png'] } }),
   });
   const dom = new JSDOM(page, { runScripts: 'dangerously', pretendToBeVisual: true, url: 'https://example.test/',
@@ -241,6 +242,28 @@ async function runDb() {
   const dayDoc = Object.entries(store).find(([k]) => k.startsWith('u/u_test/days/'))[1];
   assert(dayDoc.stackLogged === true && dayDoc.entries.some(e => e.slot === 'supplement' && e.kind === 'supplement'), '[db] day doc carries stack entries and flag');
   assert(d.querySelectorAll('.entry').length === 4, '[db] stack entry rendered');
+  // front-of-package scan: fish oil recognized from memory, with omega-3 column and EPA/DHA extras
+  d.querySelector('nav.tabs button.add').click(); await tick(5);
+  Object.defineProperty(input, 'files', { value: [file], configurable: true });
+  input.dispatchEvent(new window.Event('change', { bubbles: true })); await tick(30);
+  assert(d.querySelector('#ff-name').value === 'Ultimate Omega 2X', '[db] front scan identified the product');
+  assert(d.querySelector('#ff-status').textContent.includes('from Claude') && d.querySelector('#ff-status').className.includes('warn'), '[db] front scan is flagged as from memory');
+  assert(d.querySelector('#ff-conf').textContent.includes('medium') && d.querySelector('#ff-conf').textContent.includes('from memory'), '[db] recall confidence capped at medium');
+  assert(d.querySelector('#n-omega3').value === '2150', '[db] omega-3 column filled');
+  const xrows = d.querySelectorAll('#ff-extras .xrow'); assert(xrows.length === 2 && xrows[0].querySelector('.x-name').value === 'EPA' && xrows[0].querySelector('.x-v').value === '1125', '[db] EPA/DHA landed in other actives');
+  d.querySelector('[data-act="ff-extra-add"]').click(); assert(d.querySelectorAll('#ff-extras .xrow').length === 3, '[db] can add an active row');
+  d.querySelectorAll('[data-act="ff-extra-remove"]')[2].click(); assert(d.querySelectorAll('#ff-extras .xrow').length === 2, '[db] can remove an active row');
+  d.querySelector('[data-act="ff-save-add"]').click(); await tick(5);
+  assert(d.querySelector('#qtySlot button.on').dataset.v === 'supplement', '[db] supplement defaults to the Supplements slot');
+  d.querySelector('[data-act="q-add"]').click(); await tick(30);
+  const suppRows = Array.from(d.querySelectorAll('.entry')).filter(x => x.textContent.includes('Ultimate Omega'));
+  assert(suppRows.length === 1 && suppRows[0].querySelector('.macros-mini').textContent.startsWith('Ω3 2,150mg'), '[db] entry shows omega-3 (' + (suppRows[0] && suppRows[0].querySelector('.macros-mini').textContent) + ')');
+  if (!d.querySelector('.nf-row')) { d.querySelector('[data-act="toggle-full"]').click(); await tick(2); }
+  const o3 = Array.from(d.querySelectorAll('.nf-row')).find(r => r.querySelector('.n').textContent.startsWith('Omega-3'));
+  assert(o3 && o3.querySelector('.pct').textContent === '430%', '[db] omega-3 % of 500 mg target (' + (o3 && o3.querySelector('.pct').textContent) + ')');
+  const epa = Array.from(d.querySelectorAll('.nf-row')).find(r => r.querySelector('.n').textContent === 'EPA');
+  assert(epa && epa.querySelector('.v').textContent.startsWith('1,125 mg'), '[db] other actives section sums EPA');
+  const saved = Object.values(store).find(v => v && v.name === 'Ultimate Omega 2X'); assert(saved && saved.basis === 'knowledge' && saved.extras.length === 2, '[db] food doc keeps basis and extras');
   // reset
   d.querySelector('nav.tabs button[data-tab="me"]').click(); await tick(5);
   d.querySelector('[data-act="reset"]').click(); await tick(5);

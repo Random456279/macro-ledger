@@ -4,7 +4,7 @@ import { S, MEAL_SLOTS } from './state.js';
 import { esc, fmt, fmtQty, num, ymd, addDays, parseYmd, clamp } from './util.js';
 import { NUTR, NMETA, SHORT, scaled } from './nutrients.js';
 import { activeTargets } from './targets.js';
-import { getDay, dayTotals, entryAmountText } from './log.js';
+import { getDay, dayTotals, dayExtras, entryAmountText } from './log.js';
 import { stackFoods } from './foods.js';
 
 export function goalWord() {
@@ -27,7 +27,7 @@ export function todayHtml() {
     + '<div class="kcal-meta num"><b>' + fmt(tot.kcal) + ' eaten</b>of ' + fmt(T.kcal) + ' target</div></div>'
     + '<div class="macros">' + macro('protein', 'Protein') + macro('carbs', 'Carbs') + macro('fat', 'Fat') + '</div>'
     + '<div class="nf-toggle"><button class="link" data-act="toggle-full">' + (S.fullOpen ? 'Hide full label ▴' : 'Full label ▾') + '</button><span class="small muted num">' + (day.entries || []).length + ' item' + ((day.entries || []).length === 1 ? '' : 's') + '</span></div>';
-  if (S.fullOpen) h += fullLabelHtml(tot, T);
+  if (S.fullOpen) h += fullLabelHtml(tot, T, dayExtras(day));
   h += '</section>';
 
   const yKey = ymd(addDays(parseYmd(key), -1)); const y = S.days[yKey];
@@ -56,7 +56,7 @@ export function todayHtml() {
   return h;
 }
 
-export function fullLabelHtml(tot, T) {
+export function fullLabelHtml(tot, T, extras) {
   let h = '<div class="nf-full"><div class="nf-cols"><span>Eaten today</span><span>% of target</span></div>';
   let extStarted = false;
   NUTR.forEach(m => {
@@ -68,15 +68,20 @@ export function fullLabelHtml(tot, T) {
     const tgt = (m.noTarget || !target) ? '' : ' <span class="muted small num">/ ' + fmt(target, m.dp) + (m.max ? ' max' : '') + '</span>';
     h += '<div class="nf-row ' + (m.sub ? 'sub' : '') + '"><span class="n">' + m.label + '</span><span class="v num">' + fmt(eaten, m.dp) + (m.unit ? ' ' + m.unit : '') + tgt + '</span>' + pct + '</div>';
   });
-  h += '<div class="nf-foot">Targets come from your stats and goal (Me tab). Items marked max are limits, not goals. Micronutrient totals only count foods that list them.</div></div>';
+  if (extras && extras.length) {
+    h += '<div class="nf-cols" style="margin-top:8px;border-top:4px solid var(--ink)"><span>Other actives</span><span></span></div>';
+    extras.forEach(x => { h += '<div class="nf-row"><span class="n">' + esc(x.name) + '</span><span class="v num">' + fmt(x.v, x.v % 1 ? 1 : 0) + (x.unit ? ' ' + esc(x.unit) : '') + '</span><span class="pct lim">–</span></div>'; });
+  }
+  h += '<div class="nf-foot">Targets come from your stats and goal (Me tab). Items marked max are limits, not goals. The omega-3 target is a common guideline (EPA + DHA), not a DRI. Micronutrient totals only count foods that list them.</div></div>';
   return h;
 }
 
-/* The small line under an entry: macros, or the leading micros for a low-calorie supplement. */
+/* The small line under an entry: macros, or the leading actives for a low-calorie supplement. */
 export function miniLine(e, n) {
   if (e.kind === 'supplement' && !(num(n.kcal) > 20)) {
-    const parts = Object.keys(SHORT).filter(k => num(n[k]) > 0).slice(0, 4).map(k => SHORT[k] + ' ' + fmt(n[k], NMETA[k].dp) + NMETA[k].unit);
-    if (parts.length) return parts.join(' · ');
+    const parts = Object.keys(SHORT).filter(k => num(n[k]) > 0).map(k => SHORT[k] + ' ' + fmt(n[k], NMETA[k].dp) + NMETA[k].unit);
+    (e.extras || []).forEach(x => { if (num(x.v) > 0) parts.push(x.name + ' ' + fmt(num(x.v) * num(e.qty), num(x.v) % 1 ? 1 : 0) + (x.unit || '')); });
+    if (parts.length) return parts.slice(0, 4).join(' · ');
   }
   return 'P ' + fmt(n.protein) + '  C ' + fmt(n.carbs) + '  F ' + fmt(n.fat);
 }

@@ -5,7 +5,7 @@
      amount: {v, unit} | null (what the user typed, for display), n (per serving), slot, t, mealId? } */
 import { S } from './state.js';
 import { commit } from './store.js';
-import { NK, fullN } from './nutrients.js';
+import { NK, fullN, sumExtras, cleanExtras } from './nutrients.js';
 import { num, mkid, fmtQty, ymd } from './util.js';
 import { materialize, saveFood, saveMeal, stackFoods } from './foods.js';
 import { toast } from './ui.js';
@@ -16,6 +16,8 @@ export function dayTotals(day) {
   (day && day.entries || []).forEach(e => { const q = num(e.qty); NK.forEach(k => { t[k] += num(e.n && e.n[k]) * q; }); });
   return t;
 }
+/* Free-form actives for the day, summed by name: [{name, v, unit}]. */
+export function dayExtras(day) { return sumExtras((day && day.entries || []).map(e => [e.extras, num(e.qty)])); }
 export function mealTotals(meal) {
   const t = {}; NK.forEach(k => t[k] = 0);
   (meal.items || []).forEach(it => { const f = S.foods[it.foodId]; if (!f) return; NK.forEach(k => { t[k] += num(f.n && f.n[k]) * num(it.qty); }); });
@@ -23,7 +25,7 @@ export function mealTotals(meal) {
 }
 
 export function entryFrom(f, qty, slot, amount, extra) {
-  return Object.assign({ id: mkid(), foodId: f.id, name: f.name, brand: f.brand || null, restaurant: f.restaurant || null, servingLabel: f.servingLabel || '', servingGrams: num(f.servingGrams) || null, kind: f.kind || 'food', qty: Number(qty) || 1, amount: amount || null, n: fullN(f.n), slot, t: Date.now() }, extra || {});
+  return Object.assign({ id: mkid(), foodId: f.id, name: f.name, brand: f.brand || null, restaurant: f.restaurant || null, servingLabel: f.servingLabel || '', servingGrams: num(f.servingGrams) || null, kind: f.kind || 'food', qty: Number(qty) || 1, amount: amount || null, n: fullN(f.n), extras: cleanExtras(f.extras), slot, t: Date.now() }, extra || {});
 }
 export function entryAmountText(e) {
   if (e.amount && num(e.amount.v) > 0) return fmtQty(e.amount.v) + ' ' + e.amount.unit + ' · ' + fmtQty(e.qty) + ' serving' + (Number(e.qty) === 1 ? '' : 's');

@@ -29,6 +29,9 @@ export function calcTargets(p) {
     fiber: Math.round(kcal / 1000 * 14), addedSugar: Math.round(kcal * 0.10 / 4), satFat: Math.round(kcal * 0.10 / 9),
     cholesterol: 300, sodium: 2300, potassium: male ? 3400 : 2600, calcium: 1000, iron: male ? 8 : (age > 50 ? 8 : 18), vitD: 15,
     vitA: male ? 900 : 700, vitC: male ? 90 : 75, vitB12: 2.4, magnesium: male ? (age <= 30 ? 400 : 420) : (age <= 30 ? 310 : 320), zinc: male ? 11 : 8,
+    vitE: 15, vitK: male ? 120 : 90, vitB6: age > 50 ? (male ? 1.7 : 1.5) : 1.3, folate: 400, selenium: 55, iodine: 150,
+    omega3: 500,      /* EPA + DHA, mg. A common guideline (250 to 500 mg), not a DRI; editable like everything else */
+    caffeine: 400,    /* max, FDA's general ceiling for healthy adults */
     bmr: Math.round(bmr), tdee: Math.round(tdee),
   };
 }

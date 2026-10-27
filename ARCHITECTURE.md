@@ -96,7 +96,7 @@ Planned modules (not yet written; create them at layer 7 and register in `action
 - **Nutrients.** Always work with full vectors from `fullN()`; `null` means unknown and must stay null
   (never 0) so the full label can tell "none" from "not listed". Add a nutrient by appending to `NUTR`
   and giving it a target in `targets.calcTargets`; forms, totals, label and AI prompts follow.
-- **AI.** Prompts ask for a strict JSON shape (`ai.JSON_SHAPE`) and go through `coerceAI` before anything
+- **AI.** The label reader accepts a facts-panel photo (basis 'label', exact) or a front-of-package photo (basis 'knowledge': product identified, values from the model's memory, confidence capped at medium, flagged in the form). The page cannot reach the web, so 'knowledge' is recall, never a lookup. Prompts ask for a strict JSON shape (`ai.JSON_SHAPE`) and go through `coerceAI` before anything
   touches the form. Never trust a field's type. Fast tier by default; Careful mode uses the default tier.
   Every AI result lands in the food form for the user to confirm; nothing is logged without a tap.
 - **Copy.** Plain, short, no exclamation marks. No em dashes anywhere in UI text or comments.
@@ -113,13 +113,15 @@ localStorage under `macroledger.v1` as `{profile, foods, meals, days, tab}`).
 profile  (u/<uid>)
   sex 'm'|'f', age, heightFt, heightIn, weightLb, bodyFat|null, activity (multiplier), goal 'lose'|'maintain'|'gain',
   rate (lb/wk), targets {kcal, protein, carbs, fat, fiber, addedSugar, satFat, cholesterol, sodium, potassium, calcium,
-  iron, vitD, vitA, vitC, vitB12, magnesium, zinc, bmr, tdee}, custom (bool: targets hand-edited),
+  iron, vitD, vitA, vitC, vitE, vitK, vitB6, folate, vitB12, magnesium, zinc, selenium, iodine, omega3, caffeine, bmr, tdee}, custom (bool: targets hand-edited),
   careful (bool: AI default tier), autoStack (bool), created
 
 food  (u/<uid>/foods/<id>)
   id, name, brand|null, restaurant|null, servingLabel, servingGrams|null, n (per-serving nutrient vector),
   kind 'food'|'supplement', inStack, stackQty, fav, rating 0..5, count, last, created, updated,
-  source 'manual'|'label'|'describe'|'restaurant'|'basic', confidence|null, notes|null, basicKey (if copied from Basics)
+  extras [{name, v, unit}] (actives with no column, e.g. EPA, beta-alanine), basis 'label'|'knowledge'|null (knowledge = filled
+  from Claude's memory after a front-of-package photo; always confirm), source 'manual'|'label'|'describe'|'restaurant'|'basic',
+  confidence|null, notes|null, basicKey (if copied from Basics)
 
 meal  (u/<uid>/meals/<id>)
   id, name, items [{foodId, qty}], fav, rating, count, last, created, updated
@@ -127,7 +129,7 @@ meal  (u/<uid>/meals/<id>)
 day  (u/<uid>/days/<yyyy-mm-dd>)
   date, stackLogged (bool), entries [entry]
   entry: id, foodId, name, brand, restaurant, servingLabel, servingGrams, kind, qty (servings),
-         amount {v, unit 'g'|'oz'|'lb'}|null (what was typed), n (per-serving vector frozen at log time),
+         amount {v, unit 'g'|'oz'|'lb'}|null (what was typed), n (per-serving vector frozen at log time), extras (copied from the food),
          slot 'breakfast'|'lunch'|'dinner'|'snack'|'supplement', t, mealId?
 ```
 
@@ -141,7 +143,7 @@ then minus 500 kcal per lb/week on a cut or plus 500 on a gain, rounded to 10, f
 1200 (women). Protein: 1.1 g per lb lean mass on a cut, 1.0 otherwise (0.9 / 0.8 per lb bodyweight without
 body fat). Fat: max(27% of calories, 0.3 g per lb). Carbs: the remainder, floored at 60 g. Micros: NIH DRIs
 by sex and age; limits (satFat, addedSugar 10% of calories, sodium 2300, cholesterol 300) from the Dietary
-Guidelines and FDA Daily Values. All overridable in Me → Edit targets (`profile.custom = true`).
+Guidelines and FDA Daily Values; omega-3 (EPA + DHA) 500 mg is a common guideline, not a DRI, and caffeine 400 mg is the FDA ceiling. All overridable in Me → Edit targets (`profile.custom = true`).
 
 ## Working as a team of agents
 

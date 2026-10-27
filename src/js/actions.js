@@ -11,7 +11,7 @@ import { getDay, logFood, logMeal, logStack, updateEntry, removeEntry, copyDay }
 import { toast, openSheet, closeSheet, closeAllSheets, topSheet, topSheetNamed, sheetFrame } from './ui.js';
 import { openAdd, renderAddList } from './sheet-add.js';
 import { openQty, addFromQty, openEntry } from './sheet-qty.js';
-import { openFoodForm, readFoodForm } from './sheet-food.js';
+import { openFoodForm, readFoodForm, extraRowHtml } from './sheet-food.js';
 import { openMealBuilder, openMeal } from './sheet-meal.js';
 import { openTargetsEditor, openConfirm } from './sheet-misc.js';
 import { openDescribe, submitDescribe } from './ai.js';
@@ -53,6 +53,8 @@ export const ACT = {
   'food-open'(b) { const f = S.foods[b.dataset.id]; if (f) openFoodForm(f); },
   'new-manual'() { openFoodForm(null); },
   'ff-more'(b) { const el = topSheet(); const ext = $('#ff-ext', el); ext.hidden = !ext.hidden; b.textContent = ext.hidden ? 'More vitamins and minerals ▾' : 'Fewer nutrients ▴'; },
+  'ff-extra-add'() { const el = topSheet(); const box = $('#ff-extras', el); box.insertAdjacentHTML('beforeend', extraRowHtml({ name: '', v: null, unit: 'mg' }, box.children.length)); const last = box.lastElementChild; if (last) $('.x-name', last).focus(); },
+  'ff-extra-remove'(b) { const row = b.closest('.xrow'); if (row) row.remove(); },
   'ff-save'() { const el = topSheet(); const f = readFoodForm(el); if (!f.name) { toast('Give it a name'); return; } saveFood(f); closeSheet(); render(); hooks.refreshOpenLists(); toast('Saved'); },
   'ff-save-add'() { const el = topSheet(); const f = readFoodForm(el); if (!f.name) { toast('Give it a name'); return; } saveFood(f); const q = el._addQty || 1; closeSheet(); openQty(f, { qty: q, title: 'Add ' + f.name }); },
   'food-delete'(b) { const id = b.dataset.id; openConfirm('Delete this food?', 'It stays in any days already logged.', 'Delete', () => { deleteFood(id); closeAllSheets(); render(); toast('Deleted'); }); },
