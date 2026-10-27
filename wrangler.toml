@@ -2,6 +2,7 @@
 name = "macro-ledger"
 main = "worker/index.js"
 compatibility_date = "2025-09-01"
+keep_vars = true   # variables set in the dashboard survive deploys
 
 [assets]
 directory = "./dist/public"
