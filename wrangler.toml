@@ -16,6 +16,8 @@ database_id = "00000000-0000-0000-0000-000000000000"
 MODEL_QUICK = "claude-haiku-5-5"
 MODEL_DEFAULT = "claude-sonnet-5-5"
 AI_DAILY_CAP = "150"
+# sha256 of the owner's device key (the key itself is only on the phone). Rotate by replacing this and redeploying.
+OWNER_KEY_HASH = "da3d18700ea551192c5b556e3178b393eadc35b65a7184bf074af368e0ba2768"
 
 [observability]
 enabled = true

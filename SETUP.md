@@ -2,56 +2,59 @@
 
 The standalone app runs on Cloudflare's free tier: one Worker serves the app and a small API, a D1 database
 holds your data, and the Anthropic key lives only on the server. No login screen; the phone holds a device
-key you paste once. Everything below happens in a browser or in one terminal window.
+key you paste once. Cloudflare builds and deploys straight from the GitHub repo, so no tokens are needed
+anywhere after setup; every push to `main` goes live in about a minute.
 
-## What you need (about 15 minutes, once)
+## One-time setup (all in the Cloudflare dashboard, about 10 minutes)
 
-1. **A Cloudflare account** (free): https://dash.cloudflare.com/sign-up
-2. **An Anthropic API key** with a few dollars of credit: https://console.anthropic.com → API Keys → Create Key,
-   then Billing → add $5. Label scans and meal estimates cost a few cents a month at normal use.
+1. **Create the database.** Left menu → Storage & databases → **D1 SQL Database** → Create database →
+   name `macro-ledger` → Create. On the database page, copy the **Database ID** (a long UUID) and put it in
+   `wrangler.toml` under `database_id` (Claude does this for you if you send it the ID). Tables are created
+   automatically on the first request; no SQL to run.
+2. **Connect the repo.** Left menu → Compute → Workers & Pages → **Create application** → Workers tab →
+   **Import a repository** → connect GitHub and pick `macro-ledger`. Settings on the next screen:
+   - Project name: `macro-ledger`
+   - Production branch: `main`
+   - Build command: `npm run build:standalone`
+   - Deploy command: `npx wrangler deploy`
+   - Root directory: `/`
 
-## Path A: run the deploy yourself on Windows (secrets never leave your machine)
+   Click **Deploy**. The first build takes a minute or two; the app appears at
+   `https://macro-ledger.<your-subdomain>.workers.dev`.
+3. **Add the AI key.** On the Worker's page → Settings → **Variables and Secrets** → Add → Type **Secret** →
+   name `ANTHROPIC_API_KEY` → paste the key → Deploy. (Scanning works from the next request; everything else
+   works without it.)
+4. **Phone.** Open the URL in Safari, paste your device key when asked, then Share → **Add to Home Screen**.
+5. **Move your data.** In the old claude.ai version: Me → Copy backup. In the new one: Me → Import backup → paste.
 
-1. Install Node.js (LTS) from https://nodejs.org (one installer, defaults are fine).
-2. Unzip the project folder somewhere like `C:\Users\you\macro-ledger`.
-3. Open a terminal in that folder (right-click the folder → Open in Terminal) and run:
+## Device keys
 
-   ```
-   npm install
-   npx wrangler login
-   npm run setup
-   ```
+The owner's key is configured as a hash in `wrangler.toml` (`OWNER_KEY_HASH`); the key itself is shown once and
+lives only on your phone. To rotate it, generate a new key, replace the hash, push. For another phone or a
+friend, add a row to the `devices` table (D1 → macro-ledger → Console):
 
-   `wrangler login` opens your browser to approve Cloudflare access. `npm run setup` creates the database,
-   asks for your Anthropic key (paste it; it is stored as a Worker secret), builds, deploys, and prints two
-   things: the app URL and your device key.
-4. On your iPhone, open the URL in Safari, paste the device key when asked, then Share → Add to Home Screen.
-5. Move your existing data: in the old (claude.ai) version, Me → Copy backup; in the new one, Me → Import backup
-   and paste. Then delete the old icon.
+```sql
+INSERT INTO devices (key_hash, user_id, label, created) VALUES ('<sha256 of the new key>', 'friend-name', 'label', 0);
+```
 
-Later changes to the app: Claude sends you an updated zip (or you pull from GitHub) and you run `npm run deploy`.
-Another phone, or a friend: `npm run setup -- --new-key` prints a fresh key; each key has its own private data
-if you pass `--user name`.
-
-## Path B: let Claude deploy
-
-1. In the Cloudflare dashboard: Manage Account → Account API Tokens → Create Token → Custom token with
-   **Workers Scripts: Edit**, **D1: Edit**, **Workers KV Storage: Edit**, **Account Settings: Read** for your account.
-   Copy the token, and your Account ID (shown on the Workers & Pages overview page).
-2. Send Claude the token, the account ID, and the Anthropic key. Claude runs `npm run setup` from its own
-   environment with `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and `ANTHROPIC_API_KEY` set, and gives you
-   the URL and device key.
-3. Afterwards, roll the Cloudflare token (Edit → Roll) if you like; deploys only need a token at deploy time.
+`node -e "const c=require('crypto');const k='ml_'+c.randomBytes(24).toString('base64url');console.log(k, c.createHash('sha256').update(k).digest('hex'))"`
+prints a fresh key and its hash. A different `user_id` gets completely separate data.
 
 ## Day-to-day
 
-- Updates: `npm run deploy` (Path A) or Claude deploys (Path B). The app picks up a new build on its next launch
-  while online; offline it keeps running the last one.
-- Offline: logging works without a connection and syncs when it returns (Me → Data shows "pending" counts).
+- Updates: push to `main` (Claude does this). The app picks up a new build on its next launch while online;
+  offline it keeps running the last one.
+- Offline: logging works without a connection and syncs when it returns (Me → Data shows pending counts).
   Scanning and estimates need the network.
-- Costs: Cloudflare free tier covers this many times over (100k requests a day, 5 GB of D1). Anthropic usage
-  shows in Me → Data once the server is connected. The server also caps AI calls at 150 a day per user.
+- Costs: the Cloudflare free tier covers this many times over (100k requests a day, 5 GB of D1). Anthropic
+  usage shows in Me → Data once connected; the server caps AI calls at 150 a day per user.
 - Backups: Me → Copy backup gives you the whole dataset as text whenever you want it.
+
+## Alternative: deploy from a terminal
+
+`tools/setup.mjs` does the same job from a machine that can reach Cloudflare's API: `npx wrangler login`,
+then `npm run setup` (creates the database, mints a device key into the `devices` table, stores the secret,
+deploys). `npm run deploy` redeploys. Useful if you ever move off GitHub-driven builds.
 
 ## Local development
 

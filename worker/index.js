@@ -20,14 +20,32 @@ async function sha256(s) {
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
 }
+/* The owner's key can be configured without touching the database: OWNER_KEY_HASH (a sha256 hex) in
+   wrangler.toml vars. Publishing a hash of a 192-bit random key is safe; the key itself never leaves the phone.
+   Further keys (another phone, a friend) live in the devices table. */
 async function auth(req, env) {
   const h = req.headers.get('authorization') || '';
   const key = h.startsWith('Bearer ') ? h.slice(7).trim() : '';
   if (!key || key.length < 16) return null;
-  const row = await env.DB.prepare('SELECT user_id FROM devices WHERE key_hash = ?').bind(await sha256(key)).first();
+  const hash = await sha256(key);
+  if (env.OWNER_KEY_HASH && hash === String(env.OWNER_KEY_HASH).toLowerCase()) return 'owner';
+  const row = await env.DB.prepare('SELECT user_id FROM devices WHERE key_hash = ?').bind(hash).first();
   return row ? row.user_id : null;
 }
 const ymdUTC = d => d.toISOString().slice(0, 10);
+
+/* Tables are created on first use, so a fresh deploy needs no manual schema step. Once per isolate. */
+const SCHEMA = [
+  'CREATE TABLE IF NOT EXISTS devices (key_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, label TEXT, created INTEGER NOT NULL)',
+  'CREATE INDEX IF NOT EXISTS devices_user ON devices(user_id)',
+  'CREATE TABLE IF NOT EXISTS docs (user_id TEXT NOT NULL, kind TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (user_id, kind, id))',
+  'CREATE TABLE IF NOT EXISTS ai_usage (user_id TEXT NOT NULL, day TEXT NOT NULL, calls INTEGER NOT NULL DEFAULT 0, in_tokens INTEGER NOT NULL DEFAULT 0, out_tokens INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day))',
+];
+let schemaReady = null;
+function ensureSchema(env) {
+  if (!schemaReady) schemaReady = env.DB.batch(SCHEMA.map(s => env.DB.prepare(s))).catch(e => { schemaReady = null; throw e; });
+  return schemaReady;
+}
 
 export default {
   async fetch(req, env) {
@@ -35,7 +53,7 @@ export default {
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(req);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204 });
     let uid;
-    try { uid = await auth(req, env); } catch (e) { return err('database not ready: ' + e.message, 500); }
+    try { await ensureSchema(env); uid = await auth(req, env); } catch (e) { return err('database not ready: ' + e.message, 500); }
     if (!uid) return err('unauthorized', 401, 'unauthorized');
     try {
       if (url.pathname === '/api/me' && req.method === 'GET') return json({ user: uid, usage: await usage(env, uid) });

@@ -34,7 +34,7 @@ def ok(cond, msg):
 
 async def main():
     sh(['node', 'tools/build.mjs', '--standalone'])
-    sh([WRANGLER, 'd1', 'execute', 'macro-ledger', '--local', '-y', '--file', 'worker/schema.sql'])
+    sh([WRANGLER, 'd1', 'execute', 'macro-ledger', '--local', '-y', '--file', 'worker/schema.sql'])   # harness only; the Worker also self-creates tables
     sh([WRANGLER, 'd1', 'execute', 'macro-ledger', '--local', '-y', '--command', f"DELETE FROM devices; DELETE FROM docs; DELETE FROM ai_usage; INSERT INTO devices (key_hash, user_id, label, created) VALUES ('{KEY_HASH}', 'tester', 'test', {int(time.time()*1000)})"])
     dev = subprocess.Popen([WRANGLER, 'dev', '--local', '--port', str(PORT), '--ip', '127.0.0.1', '--var', 'AI_STUB:' + STUB], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     try:
@@ -49,6 +49,9 @@ async def main():
         # API level
         st, body = http('GET', '/api/me', key='ml_wrong'); ok(st == 401, 'wrong key is rejected (401)')
         st, body = http('GET', '/api/me'); ok(st == 200 and body['user'] == 'tester', 'right key is accepted')
+        owner_key = open('/tmp/claude-0/-home-claude/6dbda2bb-2d0b-5768-a221-287b60f52238/scratchpad/devicekey.txt').read().split()[0] if os.path.exists('/tmp/claude-0/-home-claude/6dbda2bb-2d0b-5768-a221-287b60f52238/scratchpad/devicekey.txt') else None
+        if owner_key:
+            st, body = http('GET', '/api/me', key=owner_key); ok(st == 200 and body['user'] == 'owner', 'owner key from wrangler.toml vars is accepted without a devices row')
         st, body = http('GET', '/api/state'); ok(st == 200 and body['profile'] is None and body['foods'] == {}, 'fresh state is empty')
 
         async with async_playwright() as p:
