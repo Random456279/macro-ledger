@@ -9,6 +9,7 @@
 import { KEY, S, hooks } from './state.js';
 import { ymd, addDays, clone } from './util.js';
 import { toast } from './ui.js';
+import { API, apiGetState, apiPutDocs, clearKey } from './backend.js';
 
 export const LS = {
   get() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } },
@@ -31,12 +32,88 @@ const stripUndefined = o => JSON.parse(JSON.stringify(o));
 export function commit(kind, id, data) {
   persistLocal();
   if (S.mode === 'pending') { S.pending.push([kind, id, data]); return; }
+  if (S.mode === 'api') { enqueue(kind, id, data); return; }
   if (S.mode !== 'db') return;
   const ref = kind === 'profile' ? S.base : S.base.collection(kind).doc(id);
   if (data === null) chain(ref.path, () => ref.delete());
   else chain(ref.path, () => ref.set(stripUndefined(data)));
 }
 export function flushPending() { const p = S.pending; S.pending = []; p.forEach(([k, id, d]) => commit(k, id, d)); }
+
+/* ---- API mode: write-through with an offline outbox ---- */
+const OUTBOX_LS = 'macroledger.outbox';
+let outbox = [];
+let flushTimer = null, flushing = false;
+function loadOutbox() { try { outbox = JSON.parse(localStorage.getItem(OUTBOX_LS) || '[]'); } catch (e) { outbox = []; } if (!Array.isArray(outbox)) outbox = []; }
+function saveOutbox() { try { localStorage.setItem(OUTBOX_LS, JSON.stringify(outbox)); } catch (e) { /* ignore */ } }
+function enqueue(kind, id, data) {
+  const key = kind + '/' + (kind === 'profile' ? 'me' : id);
+  outbox = outbox.filter(o => o.key !== key);                 /* only the latest write per doc matters */
+  outbox.push({ key, kind, id: kind === 'profile' ? 'me' : id, data: data === null ? null : stripUndefined(data), updated: Date.now() });
+  saveOutbox(); scheduleFlush(150);
+}
+function scheduleFlush(ms) { clearTimeout(flushTimer); flushTimer = setTimeout(flushOutbox, ms); }
+export async function flushOutbox() {
+  if (flushing || !outbox.length || S.mode !== 'api') return;
+  flushing = true; const batch = outbox.slice(0, 200);
+  try {
+    await apiPutDocs(batch.map(o => ({ kind: o.kind, id: o.id, data: o.data, updated: o.updated })));
+    const sent = new Set(batch.map(o => o.key + '@' + o.updated));
+    outbox = outbox.filter(o => !sent.has(o.key + '@' + o.updated)); saveOutbox();
+    API.lastSync = Date.now();
+    if (outbox.length) scheduleFlush(50);
+  } catch (e) {
+    if (e && e.code === 'unauthorized') { toast('Device key no longer valid'); }
+    else scheduleFlush(15000);                                   /* offline or server hiccup: retry later */
+  } finally { flushing = false; }
+}
+export const outboxSize = () => outbox.length;
+
+function applyState(st) {
+  S.profile = st.profile || null;
+  S.foods = st.foods || {}; S.meals = st.meals || {};
+  const keep = {}; Object.keys(S.days).forEach(k => { if (!(st.days && st.days[k])) keep[k] = S.days[k]; });
+  S.days = Object.assign(keep, st.days || {});
+  Object.values(S.foods).forEach((f, i) => { if (!f.id) f.id = Object.keys(S.foods)[i]; });
+  persistLocal();
+}
+
+/* Connect to the Worker API with the stored device key. Resolves 'ok', 'unauthorized' or 'offline'. */
+export async function connectApi() {
+  loadOutbox();
+  let st;
+  try { st = await apiGetState(); }
+  catch (e) {
+    if (e && e.code === 'unauthorized') { clearKey(); S.mode = 'local'; S.daysLoaded = true; flushPending(); return 'unauthorized'; }
+    S.mode = 'api'; S.daysLoaded = true; flushPending(); return 'offline';   /* keep working from the mirror; outbox syncs later */
+  }
+  S.mode = 'api';
+  const serverEmpty = !st.profile && !Object.keys(st.foods || {}).length && !Object.keys(st.days || {}).length;
+  const localHasData = !!(S.localBoot && (S.localBoot.profile || Object.keys(S.localBoot.foods || {}).length));
+  if (serverEmpty && localHasData && !outbox.length) {
+    /* first connect from a device that already has data: push it up */
+    if (S.profile) enqueue('profile', null, S.profile);
+    Object.values(S.foods).forEach(f => enqueue('foods', f.id, f));
+    Object.values(S.meals).forEach(m => enqueue('meals', m.id, m));
+    Object.keys(S.days).forEach(k => enqueue('days', k, S.days[k]));
+    toast('Moved this phone\'s log to your account');
+  } else if (!outbox.length) {
+    applyState(st);
+  } else {
+    applyState(st); /* queued local writes replay on top */
+  }
+  S.daysLoaded = true; flushPending(); API.lastSync = Date.now();
+  scheduleFlush(100);
+  return 'ok';
+}
+
+/* Pull the latest state when the app comes back to the foreground. */
+export async function refreshFromApi() {
+  if (S.mode !== 'api') return;
+  await flushOutbox();
+  if (outbox.length) return;
+  try { const st = await apiGetState(); applyState(st); API.lastSync = Date.now(); hooks.render(); } catch (e) { /* offline */ }
+}
 
 /* Load the localStorage mirror into S before anything renders. */
 export function bootLocal() {
@@ -47,7 +124,7 @@ export function bootLocal() {
   if (local.tab && local.tab !== 'me') S.tab = local.tab;
 }
 
-/* Decide the storage mode once the runtime has answered. */
+/* Decide the storage mode once the artifact runtime has answered. */
 export function connectStore(db, uid) {
   if (db && uid) {
     S.mode = 'db'; S.uid = uid;
@@ -97,8 +174,23 @@ function migrateLocal() {
   toast('Moved your local log into your account');
 }
 
-/* Days older than the 60-day window load on demand when the user navigates to them. */
+/* Days older than the subscribed window load on demand when the user navigates to them. */
 export async function loadDay(key) {
-  if (S.days[key] || S.mode !== 'db') return;
-  try { const snap = await S.base.collection('days').doc(key).get(); if (snap.exists) { S.days[key] = clone(snap.data()); persistLocal(); hooks.render(); } } catch (e) { /* ignore */ }
+  if (S.days[key]) return;
+  if (S.mode === 'db') {
+    try { const snap = await S.base.collection('days').doc(key).get(); if (snap.exists) { S.days[key] = clone(snap.data()); persistLocal(); hooks.render(); } } catch (e) { /* ignore */ }
+  } else if (S.mode === 'api') {
+    try { const st = await apiGetState(400); if (st.days && st.days[key]) { S.days[key] = st.days[key]; persistLocal(); hooks.render(); } } catch (e) { /* offline */ }
+  }
+}
+
+/* Import a backup (the JSON from "Copy backup"): merges and writes everything through commit. */
+export function importBackup(obj) {
+  if (!obj || typeof obj !== 'object') throw new Error('Not a backup');
+  let n = 0;
+  if (obj.profile && typeof obj.profile === 'object') { S.profile = obj.profile; commit('profile', null, S.profile); n++; }
+  Object.values(obj.foods || {}).forEach(f => { if (f && f.id) { S.foods[f.id] = f; commit('foods', f.id, f); n++; } });
+  Object.values(obj.meals || {}).forEach(m => { if (m && m.id) { S.meals[m.id] = m; commit('meals', m.id, m); n++; } });
+  Object.keys(obj.days || {}).forEach(k => { const d = obj.days[k]; if (d && typeof d === 'object') { S.days[k] = Object.assign({ date: k }, d); commit('days', k, S.days[k]); n++; } });
+  return n;
 }

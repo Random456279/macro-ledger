@@ -7,6 +7,7 @@ import { NK, cleanExtras } from './nutrients.js';
 import { $, $$, esc, numOrNull, fmtQty } from './util.js';
 import { toast, openSheet, sheetFrame, closeSheet } from './ui.js';
 import { openFoodForm, fillFoodForm, setStatus } from './sheet-food.js';
+import { askJSON, aiAvailable } from './backend.js';
 
 export const JSON_SHAPE = '{"kind": "food"|"supplement", "basis": "label"|"knowledge", "name": string, "brand": string|null, "servingLabel": string, "servingGrams": number|null, "servingsPerContainer": number|null, "perServing": {' + NK.map(k => '"' + k + '": number|null').join(', ') + '}, "extras": [{"name": string, "amount": number, "unit": string}], "confidence": "high"|"medium"|"low", "notes": string}';
 export const UNIT_RULES = 'Units: grams for protein, carbs, fat, fiber, sugar, addedSugar, satFat, transFat and creatine; milligrams for cholesterol, sodium, potassium, calcium, iron, vitC, vitE, vitB6, magnesium, zinc, omega3 and caffeine; micrograms for vitD, vitA (as RAE), vitK, folate (as DFE), vitB12, selenium and iodine. omega3 is EPA plus DHA in mg (use total omega-3 if that is all that is printed; put EPA and DHA separately in extras). If a value is printed only as a percent Daily Value, convert it with these daily values: calcium 1300 mg, iron 18 mg, potassium 4700 mg, vitamin D 20 mcg, vitamin A 900 mcg, vitamin C 90 mg, vitamin E 15 mg, vitamin K 120 mcg, vitamin B6 1.7 mg, folate 400 mcg, vitamin B12 2.4 mcg, magnesium 420 mg, zinc 11 mg, selenium 55 mcg, iodine 150 mcg. Convert IU: vitamin D 40 IU = 1 mcg, vitamin A 3.33 IU = 1 mcg, vitamin E 1.5 IU = 1 mg. Every other active with an amount (beta-alanine, citrulline, taurine, probiotics in CFU, ashwagandha, electrolytes not listed above, other B vitamins, biotin, chromium, copper, manganese) goes in extras as {name, amount, unit}, one entry each, exact label wording for the name.';
@@ -46,6 +47,9 @@ export function aiErrorCopy(e) {
   if (c === 'images_unavailable' || c === 'image_rejected') return 'That photo couldn\'t be sent. Try a clearer JPEG, or enter the label by hand.';
   if (c === 'invalid_json' || c === 'empty_completion') return 'The label couldn\'t be read into numbers. Try again with a sharper, straight-on photo, or enter it by hand.';
   if (c === 'session_expired') return 'Your Claude session expired. Sign in again, then retry.';
+  if (c === 'offline') return 'No connection. Scanning needs the network; enter it by hand for now.';
+  if (c === 'unauthorized') return 'This device key is no longer valid. Reconnect in Me.';
+  if (c === 'server_not_configured') return 'The server has no AI key yet. Enter it by hand for now.';
   if (c === 'refused') return 'Claude declined to read that image. Enter it by hand.';
   if (c === 'cancelled') return 'Cancelled.';
   return 'Something went wrong talking to Claude. Try again, or enter it by hand.';
@@ -67,12 +71,12 @@ export async function initAI(sample) {
 }
 
 export async function scanLabel(file) {
-  if (!S.ai.sample) { toast('Scanning needs Claude; opening manual entry'); openFoodForm(null); return; }
+  if (!aiAvailable()) { toast('Scanning needs Claude; opening manual entry'); openFoodForm(null); return; }
   const thumb = URL.createObjectURL(file);
   const el = openFoodForm(null, { title: 'Scan label', status: '<span class="spin"></span>Reading the label…', thumb });
   el._meta.source = 'label';
   try {
-    const j = await S.ai.sample.json(LABEL_PROMPT, Object.assign({ images: [file] }, modelOpts()));
+    const j = await askJSON(LABEL_PROMPT, Object.assign({ images: [file] }, modelOpts()));
     const d = coerceAI(j, { source: 'label' });
     if (!document.body.contains(el)) return;
     fillFoodForm(el, d);
@@ -91,7 +95,7 @@ export async function scanLabel(file) {
 }
 
 export function openDescribe() {
-  if (!S.ai.sample) { toast('Estimates need Claude; opening manual entry'); openFoodForm(null); return; }
+  if (!aiAvailable()) { toast('Estimates need Claude; opening manual entry'); openFoodForm(null); return; }
   const body = '<div class="field"><label>What did you eat?</label><textarea id="d-text" placeholder="e.g. 0.9 lb chicken breast (raw), 1 cup cooked white rice, 1 tbsp olive oil&#10;or: chicken burrito bowl with white rice, black beans, guac and salsa"></textarea><span class="hint">Weights and counts you give are used exactly. Meat and grain weights count as raw unless you say cooked.</span></div>'
     + '<div class="field"><label>Restaurant (optional)</label><input id="d-where" type="text" placeholder="Chipotle, Joe T. Garcia\'s, home…"></div>'
     + '<div class="field"><label>How much of it did you eat?</label><div class="seg" id="d-portion"><button type="button" data-v="1" class="on">All</button><button type="button" data-v="0.75">3/4</button><button type="button" data-v="0.5">Half</button><button type="button" data-v="0.25">1/4</button></div></div>'
@@ -112,7 +116,7 @@ export async function runDescribe(desc, where, portion) {
   el._meta.source = where ? 'restaurant' : 'describe'; el._meta.restaurant = where || null;
   $('#ff-rest', el).value = where || '';
   try {
-    const j = await S.ai.sample.json(describePrompt(desc, where), modelOpts());
+    const j = await askJSON(describePrompt(desc, where), modelOpts());
     const d = coerceAI(j, { source: where ? 'restaurant' : 'describe' });
     if (!document.body.contains(el)) return;
     if (!d.name) d.name = desc.slice(0, 40);

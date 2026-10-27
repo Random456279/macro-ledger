@@ -13,6 +13,21 @@ export function toggleDetails() {
   openSheet(sheetFrame('Today in detail', detailsHtml()), { name: 'details' });
 }
 
+/* Standalone only: paste the device key once. */
+export function openKeySheet(message) {
+  const body = (message ? '<div class="note warn">' + esc(message) + '</div>' : '')
+    + '<p class="small muted">Macro Ledger keeps your data on your own server. Paste the device key you were given to connect this phone. Without it the app still works, but only on this device.</p>'
+    + '<div class="field"><label>Device key</label><input id="k-key" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ml_…"></div>';
+  openSheet(sheetFrame('Connect this device', body, '<button class="btn" data-act="close">Not now</button><button class="btn primary" data-act="connect-go">Connect</button>'), { name: 'key' });
+}
+
+/* Paste a backup (from Copy backup) to merge it in. */
+export function openImportSheet() {
+  const body = '<p class="small muted">Paste the text from "Copy backup". Foods, meals, days and your profile are merged in; nothing is deleted.</p>'
+    + '<div class="field"><label>Backup text</label><textarea id="imp-text" style="min-height:160px;font-size:12px" placeholder=\'{"exported": …\'></textarea></div>';
+  openSheet(sheetFrame('Import backup', body, '<button class="btn primary" data-act="import-go">Import</button>'), { name: 'import' });
+}
+
 export function openSlotMenu(slot) {
   const body = '<div class="stack tight">'
     + '<button class="btn block" data-act="save-meal" data-slot="' + slot + '">Save ' + esc(SLOT_LABEL[slot].toLowerCase()) + ' as a meal</button>'

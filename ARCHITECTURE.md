@@ -20,6 +20,9 @@ npm install                 # once; esbuild + jsdom
 npm run build               # src/ -> dist/macro-ledger.html (inline CSS + bundled JS)
 npm test                    # build + test/smoke.cjs (jsdom, local mode and stubbed db/AI mode)
 npm run shots               # build + phone-width screenshots to test/shots/ (needs Playwright Chromium)
+npm run build:standalone    # src/ -> dist/public (full document, manifest, service worker, icons)
+npm run test:standalone     # standalone build against a local Worker with a stubbed AI (wrangler dev)
+npm run setup / npm run deploy   # Cloudflare: first deploy / redeploy (see SETUP.md)
 ```
 
 Publishing is done with the claude.ai Artifact tool, from a Claude session, never by hand:
@@ -30,6 +33,20 @@ Passing `capabilities` again is only needed to change them; omitting the field k
 
 Bump `VERSION` in `src/js/state.js` on every publish. It shows under Me → Data as "build x.y.z", which is how
 the phone confirms it loaded the new code.
+
+## Backends
+
+The same build runs in three places; `backend.js` and `store.js` pick at boot:
+
+- **artifact** (claude.ai): `window.claude.use` gives `db` (storage) and `sample` (Claude). Published with the Artifact tool.
+- **api** (own URL, the standalone build): a Cloudflare Worker (`worker/index.js`) serves `dist/public` and a JSON API
+  under `/api` backed by D1 (`worker/schema.sql`). The phone authorizes with a device key (sha256 stored in `devices`);
+  writes go through an offline outbox (`macroledger.outbox` in localStorage) and replay in order; `/api/ask` proxies
+  Claude with the server-held `ANTHROPIC_API_KEY`, caps calls per day, and records usage. `tools/setup.mjs` deploys it;
+  see SETUP.md.
+- **local**: neither is available (a saved file, a signed-out viewer, no key yet): localStorage only.
+
+`askJSON()` in `backend.js` is the one entry point for "ask Claude for JSON"; ai.js never checks which backend answers.
 
 ## Runtime environment
 
@@ -61,7 +78,8 @@ request a re-render without importing the UI.
 | 1 | `basics.js` | built-in generic foods | nutrients |
 | 2 | `targets.js` | `calcTargets`, `profileComplete`, `activeTargets` | util, state |
 | 2 | `ui.js` | toast, sheet stack, icons, star control | util, state |
-| 3 | `store.js` | localStorage mirror, `commit`, db subscriptions, migration, `connectStore` | state, util, ui |
+| 2 | `backend.js` | which backend, API client, device key, image downscale, `askJSON` | state |
+| 3 | `store.js` | localStorage mirror, `commit`, artifact db subscriptions, API mode with outbox, import | state, util, ui, backend |
 | 4 | `foods.js` | My Foods and Meals CRUD, search, sort, Basics materialization, stack list | state, store, basics, util |
 | 5 | `log.js` | day docs, totals, entries, log/edit/remove/copy, stack logging and auto-log | state, store, nutrients, util, foods, ui |
 | 6 | `sheet-food.js` | food form (new, edit, AI-filled) read/write | util, nutrients, ui |

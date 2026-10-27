@@ -13,8 +13,10 @@ import { openAdd, renderAddList } from './sheet-add.js';
 import { openQty, addFromQty, openEntry } from './sheet-qty.js';
 import { openFoodForm, readFoodForm, extraRowHtml } from './sheet-food.js';
 import { openMealBuilder, openMeal } from './sheet-meal.js';
-import { openTargetsEditor, openConfirm, toggleDetails, openSlotMenu } from './sheet-misc.js';
+import { openTargetsEditor, openConfirm, toggleDetails, openSlotMenu, openKeySheet, openImportSheet } from './sheet-misc.js';
 import { openDescribe, submitDescribe } from './ai.js';
+import { aiAvailable, imagesAvailable, saveKey, clearKey, apiMe, API } from './backend.js';
+import { connectApi, importBackup, flushOutbox } from './store.js';
 import { readProfileForm } from './view-me.js';
 
 const render = () => hooks.render();
@@ -68,8 +70,8 @@ export const ACT = {
 
   /* AI entry points */
   scan() {
-    if (!S.ai.sample) { toast('Scanning needs Claude; opening manual entry'); openFoodForm(null); return; }
-    if (!S.ai.images) { toast('Photos aren\'t available in this view; describe it instead'); openDescribe(); return; }
+    if (!aiAvailable()) { toast('Scanning needs Claude; opening manual entry'); openFoodForm(null); return; }
+    if (!imagesAvailable()) { toast('Photos aren\'t available in this view; describe it instead'); openDescribe(); return; }
     $('#photoInput').click();
   },
   describe() { openDescribe(); },
@@ -108,6 +110,24 @@ export const ACT = {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(data).then(done).catch(fallback); else fallback();
   },
   reset() { openConfirm('Reset everything?', 'This deletes your profile, foods, meals and every logged day from this app. There is no undo.', 'Delete it all', doReset); },
+
+  /* standalone: device key and backups */
+  connect() { openKeySheet(); },
+  async 'connect-go'() {
+    const el = topSheet(); const k = ($('#k-key', el).value || '').trim(); if (!k) { toast('Paste the key first'); return; }
+    const btn = $('[data-act="connect-go"]', el); btn.disabled = true; btn.textContent = 'Connecting…';
+    saveKey(k);
+    try { await apiMe(); } catch (e) { clearKey(); btn.disabled = false; btn.textContent = 'Connect'; toast(e && e.code === 'unauthorized' ? 'That key was not accepted' : 'Could not reach the server'); return; }
+    closeSheet(); S.mode = 'pending'; const r = await connectApi(); render(); toast(r === 'ok' ? 'Connected' : 'Connected (offline for now)');
+  },
+  disconnect() { openConfirm('Disconnect this device?', 'The app keeps working on this phone only; nothing on the server is deleted. Paste the key again to reconnect.', 'Disconnect', () => { clearKey(); S.mode = 'local'; render(); toast('Disconnected'); }); },
+  import() { openImportSheet(); },
+  'import-go'() {
+    const el = topSheet(); let obj;
+    try { obj = JSON.parse($('#imp-text', el).value); } catch (e) { toast('That is not valid backup text'); return; }
+    let n; try { n = importBackup(obj); } catch (e) { toast('That is not a Macro Ledger backup'); return; }
+    closeSheet(); render(); flushOutbox(); toast('Imported ' + n + ' record' + (n === 1 ? '' : 's'));
+  },
 };
 
 export function doReset() {

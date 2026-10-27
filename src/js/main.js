@@ -1,7 +1,9 @@
 /* Entry point: render loop, event routing, boot. Keep this file small; features live in their modules. */
 import { S, hooks } from './state.js';
 import { $, $$, esc, ymd, niceDate, shortDate } from './util.js';
-import { bootLocal, connectStore, persistLocal } from './store.js';
+import { bootLocal, connectStore, connectApi, refreshFromApi, flushOutbox, flushPending } from './store.js';
+import { isStandalone, loadKey } from './backend.js';
+import { openKeySheet } from './sheet-misc.js';
 import { ICON, topSheet, closeSheet } from './ui.js';
 import { maybeAutoLogStack } from './log.js';
 import { initAI, scanLabel } from './ai.js';
@@ -81,6 +83,16 @@ $('#main').addEventListener('change', e => { if (e.target.closest('#f-hft,#f-hin
 (async function boot() {
   bootLocal();
   S.ready = true; render();
+  if (isStandalone()) {
+    /* own URL: the Worker API with a device key; local-only until a key is entered */
+    if (loadKey()) {
+      const r = await connectApi(); render();
+      if (r === 'unauthorized') openKeySheet('That device key is no longer valid. Paste a current one.');
+    } else { S.mode = 'local'; S.daysLoaded = true; flushPending(); render(); openKeySheet(); }
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshFromApi(); });
+    window.addEventListener('online', () => flushOutbox());
+    return;
+  }
   if (!(window.claude && typeof window.claude.use === 'function')) { S.mode = 'local'; S.pending = []; S.daysLoaded = true; render(); return; }
   let db = null, user = null, sample = null;
   try { [db, user, sample] = await Promise.all([claude.use('db'), claude.use('user'), claude.use('sample')]); } catch (e) { /* treat as absent */ }

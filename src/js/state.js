@@ -3,7 +3,7 @@
    importing the UI (main.js fills them in at boot). */
 import { ymd } from './util.js';
 
-export const VERSION = '0.5.0';
+export const VERSION = '0.6.0';
 export const KEY = 'macroledger.v1';          /* localStorage mirror key */
 
 export const SLOTS = [

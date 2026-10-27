@@ -4,6 +4,8 @@ import { $, esc, fmt, fmtQty, numOrNull } from './util.js';
 import { NUTR } from './nutrients.js';
 import { calcTargets, profileComplete, activeTargets } from './targets.js';
 import { stackFoods } from './foods.js';
+import { aiAvailable, API, isStandalone } from './backend.js';
+import { outboxSize } from './store.js';
 
 export function profileFormHtml(p) {
   const sel = (v) => Number(p.activity || 1.375) === v ? 'selected' : '';
@@ -68,8 +70,9 @@ export function onboardingHtml(p) {
 }
 export function meHtml() {
   const p = S.profile; const T = activeTargets();
-  const storage = S.mode === 'db' ? 'Saved to your Claude account' : S.mode === 'pending' ? 'Connecting…' : 'Saved on this device only';
-  const aiLine = S.ai.sample ? ('Label scanning (Nutrition Facts and Supplement Facts) and meal estimates run on your Claude account' + (S.ai.images ? '.' : ' (photos not available in this view).')) : 'Open this page inside Claude to scan labels and estimate meals.';
+  const pend = outboxSize();
+  const storage = S.mode === 'db' ? 'Saved to your Claude account' : S.mode === 'api' ? (API.online ? 'Synced to your server' + (pend ? ' (' + pend + ' pending)' : '') : 'Offline, ' + pend + ' change' + (pend === 1 ? '' : 's') + ' waiting to sync') : S.mode === 'pending' ? 'Connecting…' : 'Saved on this device only';
+  const aiLine = S.ai.sample ? ('Label scanning (Nutrition Facts and Supplement Facts) and meal estimates run on your Claude account' + (S.ai.images ? '.' : ' (photos not available in this view).')) : aiAvailable() ? 'Label scanning and meal estimates run through your own server and API key.' : isStandalone() ? 'Connect this device (Me → Data) to scan labels and estimate meals.' : 'Open this page inside Claude to scan labels and estimate meals.';
   const stack = stackFoods();
   let h = '<section class="stack"><div class="sec-h"><h2>Stats and goal</h2></div><div class="card">' + profileFormHtml(p) + '</div><div id="targets-preview">' + targetsPreviewHtml(p) + '</div>'
     + '<div class="btnrow"><button class="btn primary" data-act="me-save">Save and recalculate</button></div>'
@@ -85,7 +88,9 @@ export function meHtml() {
     + (stack.length ? stack.map(f => '<div class="kv"><span class="k">' + esc(f.name) + '</span><span class="v num">' + fmtQty(f.stackQty) + ' × ' + esc(f.servingLabel || 'serving') + '</span></div>').join('') : '<div class="kv"><span class="k muted">No stack yet. Scan a Supplement Facts label and mark it "In daily stack".</span></div>')
     + '</div></section>';
   h += '<section class="stack"><div class="sec-h"><h2>Data</h2><span class="meta">build ' + esc(VERSION) + '</span></div><div class="card" style="padding-block:4px"><div class="kv"><span class="k">Storage</span><span class="v">' + esc(storage) + '</span></div>'
-    + '<div class="kv"><span class="k">Foods / meals / days</span><span class="v num">' + Object.keys(S.foods).length + ' / ' + Object.keys(S.meals).length + ' / ' + Object.keys(S.days).length + '</span></div></div>'
-    + '<div class="btnrow"><button class="btn" data-act="export">Copy backup</button><button class="btn danger" data-act="reset">Reset everything</button></div></section>';
+    + '<div class="kv"><span class="k">Foods / meals / days</span><span class="v num">' + Object.keys(S.foods).length + ' / ' + Object.keys(S.meals).length + ' / ' + Object.keys(S.days).length + '</span></div>'
+    + (isStandalone() ? '<div class="kv"><span class="k">Device key</span><span class="v">' + (API.key ? '<button class="link" data-act="disconnect">Disconnect</button>' : '<button class="link" data-act="connect">Connect</button>') + '</span></div>' : '') + '</div>'
+    + '<div class="btnrow"><button class="btn" data-act="export">Copy backup</button><button class="btn" data-act="import">Import backup</button></div>'
+    + '<div class="btnrow"><button class="btn danger" data-act="reset">Reset everything</button></div></section>';
   return h;
 }
