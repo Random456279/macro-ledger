@@ -1,0 +1,16 @@
+{
+  "name": "macro-ledger",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Macro Ledger: an iPhone macro and nutrient tracker published as a claude.ai artifact.",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "test": "node tools/build.mjs && node test/smoke.cjs",
+    "shots": "node tools/build.mjs && python3 test/shots.py"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.0",
+    "jsdom": "24.1.0"
+  }
+}

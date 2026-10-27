@@ -1,0 +1,5 @@
+node_modules/
+dist/
+test/shots/
+test/.www/
+.DS_Store
