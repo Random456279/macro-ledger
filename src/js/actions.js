@@ -13,7 +13,7 @@ import { openAdd, renderAddList } from './sheet-add.js';
 import { openQty, addFromQty, openEntry } from './sheet-qty.js';
 import { openFoodForm, readFoodForm, extraRowHtml } from './sheet-food.js';
 import { openMealBuilder, openMeal } from './sheet-meal.js';
-import { openTargetsEditor, openConfirm } from './sheet-misc.js';
+import { openTargetsEditor, openConfirm, toggleDetails, openSlotMenu } from './sheet-misc.js';
 import { openDescribe, submitDescribe } from './ai.js';
 import { readProfileForm } from './view-me.js';
 
@@ -24,7 +24,14 @@ export const ACT = {
   tab(b) { S.tab = b.dataset.tab; if (S.tab === 'today') S.dayKey = ymd(new Date()); persistLocal(); render(); $('#main').scrollTop = 0; },
   day(b) { S.dayKey = ymd(addDays(parseYmd(S.dayKey), Number(b.dataset.n))); loadDay(S.dayKey); render(); },
   'day-today'() { S.dayKey = ymd(new Date()); render(); },
-  'toggle-full'() { S.fullOpen = !S.fullOpen; render(); },
+  'toggle-full'() { toggleDetails(); },
+  'slot-more'(b) { openSlotMenu(b.dataset.slot); },
+  'clear-slot'(b) {
+    const slot = b.dataset.slot; closeSheet();
+    openConfirm('Remove everything in ' + SLOT_LABEL[slot].toLowerCase() + '?', 'The foods stay in My Foods; only today\'s entries go.', 'Remove', () => {
+      const day = getDay(S.dayKey); (day.entries || []).filter(e => e.slot === slot).forEach(e => removeEntry(S.dayKey, e.id)); render(); toast('Cleared');
+    });
+  },
   'copy-yesterday'() { copyDay(ymd(addDays(parseYmd(S.dayKey), -1)), S.dayKey); render(); toast('Copied yesterday'); },
   close() { closeSheet(); },
   'confirm-yes'() { const el = topSheet(); const f = el._onYes; closeSheet(); f && f(); },
@@ -70,6 +77,7 @@ export const ACT = {
 
   /* meals */
   'save-meal'(b) {
+    if (topSheetNamed('slotmenu')) closeSheet();
     const day = getDay(S.dayKey); const es = (day.entries || []).filter(e => e.slot === b.dataset.slot); if (!es.length) return;
     const items = []; es.forEach(e => { if (!S.foods[e.foodId]) return; const ex = items.find(i => i.foodId === e.foodId); if (ex) ex.qty += num(e.qty); else items.push({ foodId: e.foodId, qty: num(e.qty) }); });
     if (!items.length) { toast('These entries aren\'t linked to saved foods'); return; }

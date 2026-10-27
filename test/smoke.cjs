@@ -25,7 +25,7 @@ async function runLocal() {
   assert(!d.querySelector('#onb-go').disabled, 'start enabled after stats');
   assert(d.querySelector('#targets-preview').textContent.includes('Calories'), 'targets preview shows calories');
   d.querySelector('#onb-go').click(); await tick(5);
-  assert(d.querySelector('.nf-title') && d.querySelector('.nf-title').textContent === 'Remaining', 'today view rendered after onboarding');
+  assert(d.querySelector('.hero .kcal-big'), 'today view rendered after onboarding');
   const kcalLeft = d.querySelector('.kcal-big').textContent; console.log('    kcal left: ' + kcalLeft);
   // open add sheet, pick basics, log an egg x2
   d.querySelector('nav.tabs button.add').click(); await tick(5);
@@ -41,16 +41,19 @@ async function runLocal() {
   const eaten = d.querySelector('.kcal-meta b').textContent; assert(eaten.startsWith('144'), 'eaten shows 144 for 2 eggs (got ' + eaten + ')');
   // full label toggle
   d.querySelector('[data-act="toggle-full"]').click(); await tick(2);
-  assert(d.querySelectorAll('.nf-row').length === 29, 'full label has 29 rows (got ' + d.querySelectorAll('.nf-row').length + ')');
+  assert(d.querySelectorAll('.nf-row').length === 29, 'details sheet has 29 rows (got ' + d.querySelectorAll('.nf-row').length + ')');
+  d.querySelector('[data-act="toggle-full"]').click(); await tick(2); assert(!d.querySelector('.nf-row'), 'details sheet closes on second tap');
   // edit entry: change qty to 1, slot to lunch
   d.querySelector('.entry').click(); await tick(2);
   d.querySelector('#qtyInput').value = '1';
   d.querySelector('#qtySlot button[data-v="lunch"]').click();
   d.querySelector('[data-act="entry-save"]').click(); await tick(2);
-  const lunch = Array.from(d.querySelectorAll('.slot')).find(s => s.querySelector('h2').textContent === 'Lunch');
+  const lunch = Array.from(d.querySelectorAll('.slot')).find(s => s.querySelector('h2').textContent.startsWith('Lunch'));
   assert(lunch.querySelector('.entry'), 'entry moved to lunch');
   // save slot as meal
-  lunch.querySelector('[data-act="save-meal"]').click(); await tick(2);
+  lunch.querySelector('[data-act="slot-more"]').click(); await tick(2);
+  assert(d.querySelector('[data-act="save-meal"]'), 'slot menu offers save as meal');
+  d.querySelector('[data-act="save-meal"]').click(); await tick(2);
   assert(d.querySelector('#m-name'), 'meal builder open from slot');
   d.querySelector('#m-name').value = 'Egg lunch';
   d.querySelector('[data-act="m-save"]').click(); await tick(2);
@@ -110,10 +113,10 @@ async function runLocal() {
   assert(d.querySelector('#foodsList .title').textContent === 'Vitamin D3', 'supplements chip lists the supplement');
   assert(d.querySelector('#foodsList .sub').textContent.includes('stack · 2/day'), 'row shows stack qty');
   d.querySelector('nav.tabs button[data-tab="today"]').click(); await tick(2);
-  const suppSec = Array.from(d.querySelectorAll('.slot')).find(s => s.querySelector('h2').textContent === 'Supplements');
+  const suppSec = Array.from(d.querySelectorAll('.slot')).find(s => s.querySelector('h2').textContent.startsWith('Supplements'));
   assert(suppSec && suppSec.querySelector('[data-act="log-stack"]'), 'Today shows Supplements row with Log stack');
   suppSec.querySelector('[data-act="log-stack"]').click(); await tick(2);
-  const suppSec2 = Array.from(d.querySelectorAll('.slot')).find(s => s.querySelector('h2').textContent === 'Supplements');
+  const suppSec2 = Array.from(d.querySelectorAll('.slot')).find(s => s.querySelector('h2').textContent.startsWith('Supplements'));
   assert(suppSec2.querySelector('.entry') && !suppSec2.querySelector('[data-act="log-stack"]'), 'stack logged once, button gone');
   assert(suppSec2.querySelector('.entry .sub').textContent.startsWith('2 × 1 softgel'), 'stack entry uses servings per day');
   assert(suppSec2.querySelector('.macros-mini').textContent.startsWith('D 50.0mcg'), 'supplement row shows micros (' + suppSec2.querySelector('.macros-mini').textContent + ')');
@@ -156,7 +159,7 @@ async function runLocal() {
   const dom2 = new JSDOM(page, { runScripts: 'dangerously', pretendToBeVisual: true, url: 'https://example.test/', beforeParse(w) { w.localStorage.setItem('macroledger.v1', JSON.stringify(saved)); } });
   await tick(30);
   const d2 = dom2.window.document;
-  const sup2 = Array.from(d2.querySelectorAll('.slot')).find(s => s.querySelector('h2').textContent === 'Supplements');
+  const sup2 = Array.from(d2.querySelectorAll('.slot')).find(s => s.querySelector('h2').textContent.startsWith('Supplements'));
   assert(sup2 && sup2.querySelector('.entry') && !sup2.querySelector('[data-act="log-stack"]'), 'auto-stack logs on first open of the day');
   dom2.window.close();
   assert(errors.length === 0, 'no script errors during local flow');
@@ -194,7 +197,7 @@ async function runDb() {
   set('#f-age', 20); set('#f-hft', 6); set('#f-hin', 0); set('#f-wt', 180);
   d.querySelector('#onb-go').click(); await tick(20);
   assert(store['u/u_test'] && store['u/u_test'].targets, '[db] profile written to u/<uid>');
-  assert(d.querySelector('.nf-title'), '[db] today rendered');
+  assert(d.querySelector('.hero .kcal-big'), '[db] today rendered');
   // log a basic -> food doc + day doc
   d.querySelector('nav.tabs button.add').click(); await tick(5);
   d.querySelector('[data-act="add-filter"][data-f="basics"]').click();
@@ -236,7 +239,7 @@ async function runDb() {
   assert(!d.querySelector('#ff-ext').hidden && d.querySelector('#n-zinc').value === '11', '[db] extra nutrients filled and shown');
   d.querySelector('[data-act="ff-save"]').click(); await tick(30);
   d.querySelector('nav.tabs button[data-tab="today"]').click(); await tick(5);
-  const ss = Array.from(d.querySelectorAll('.slot')).find(s => s.querySelector('h2').textContent === 'Supplements');
+  const ss = Array.from(d.querySelectorAll('.slot')).find(s => s.querySelector('h2').textContent.startsWith('Supplements'));
   assert(ss && ss.querySelector('[data-act="log-stack"]'), '[db] Today offers Log stack after saving supplement');
   ss.querySelector('[data-act="log-stack"]').click(); await tick(30);
   const dayDoc = Object.entries(store).find(([k]) => k.startsWith('u/u_test/days/'))[1];

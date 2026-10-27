@@ -30,8 +30,8 @@ export function render() {
 }
 function renderHeader() {
   const h = $('#hdr');
-  if (!S.profile) { h.innerHTML = '<div><div class="eyebrow">Macro Ledger</div><h1>Set up</h1></div>'; return; }
-  const titles = { today: 'Today', foods: 'My Foods', meals: 'Meals', me: 'Me' };
+  if (!S.profile) { h.innerHTML = '<div><div class="eyebrow">Macro Ledger</div><h1>Welcome</h1></div>'; return; }
+  const titles = { today: 'Today', foods: 'Foods', meals: 'Meals', me: 'Me' };
   let right = '';
   if (S.tab === 'today') {
     const isToday = S.dayKey === ymd(new Date());
@@ -39,8 +39,10 @@ function renderHeader() {
       + '<button class="link dlabel num ' + (isToday ? 'today' : '') + '" data-act="day-today">' + (isToday ? 'Today' : shortDate(S.dayKey)) + '</button>'
       + '<button class="iconbtn" data-act="day" data-n="1" aria-label="Next day">' + ICON.chevR + '</button></div>';
   }
-  const title = S.tab === 'today' && S.dayKey !== ymd(new Date()) ? niceDate(S.dayKey) : titles[S.tab];
-  h.innerHTML = '<div><div class="eyebrow">Macro Ledger</div><h1>' + esc(title) + '</h1></div>' + right;
+  const isToday = S.dayKey === ymd(new Date());
+  const eyebrow = S.tab === 'today' ? (isToday ? niceDate(S.dayKey) : 'Macro Ledger') : 'Macro Ledger';
+  const title = S.tab === 'today' && !isToday ? niceDate(S.dayKey) : titles[S.tab];
+  h.innerHTML = '<div><div class="eyebrow">' + esc(eyebrow) + '</div><h1>' + esc(title) + '</h1></div>' + right;
 }
 function renderTabs() {
   const t = $('#tabs');

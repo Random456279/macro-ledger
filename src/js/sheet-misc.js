@@ -1,8 +1,24 @@
-/* Small sheets: the targets editor and the in-page confirm (the viewer shows no native confirm()). */
+/* Small sheets: the day's Details, the targets editor, the per-slot menu, and the in-page confirm
+   (the viewer shows no native confirm()). */
 import { esc } from './util.js';
 import { NUTR } from './nutrients.js';
+import { SLOT_LABEL } from './state.js';
 import { activeTargets } from './targets.js';
-import { openSheet, sheetFrame } from './ui.js';
+import { openSheet, sheetFrame, topSheetNamed, closeSheet } from './ui.js';
+import { detailsHtml } from './view-today.js';
+
+/* Details is a toggle: a second tap (or the test's second click) closes it. */
+export function toggleDetails() {
+  if (topSheetNamed('details')) { closeSheet(); return; }
+  openSheet(sheetFrame('Today in detail', detailsHtml()), { name: 'details' });
+}
+
+export function openSlotMenu(slot) {
+  const body = '<div class="stack tight">'
+    + '<button class="btn block" data-act="save-meal" data-slot="' + slot + '">Save ' + esc(SLOT_LABEL[slot].toLowerCase()) + ' as a meal</button>'
+    + '<button class="btn block danger" data-act="clear-slot" data-slot="' + slot + '">Remove everything in ' + esc(SLOT_LABEL[slot].toLowerCase()) + '</button></div>';
+  openSheet(sheetFrame(SLOT_LABEL[slot], body), { name: 'slotmenu' });
+}
 
 export function openTargetsEditor() {
   const T = activeTargets();

@@ -61,8 +61,8 @@ export function targetsPreviewHtml(p) {
     + '<div class="tp-row"><span class="muted">Maintenance</span><span class="muted num">' + fmt(T.tdee) + ' cal (BMR ' + fmt(T.bmr) + ')</span></div></div>';
 }
 export function onboardingHtml(p) {
-  return '<div class="onb-hero"><h2>Your numbers, your food, your rules.</h2><p>Enter your stats once. Macro Ledger sets daily calorie and macro targets, and you log against them by scanning labels, describing meals, or tapping favorites.</p></div>'
-    + profileFormHtml(p) + '<div id="targets-preview">' + targetsPreviewHtml(p) + '</div>'
+  return '<div class="onb-hero"><h2>Your numbers, your food.</h2><p>Enter your stats once. Macro Ledger sets daily calorie and macro targets; you log against them by scanning labels, describing meals, or tapping favorites.</p></div>'
+    + '<div class="card">' + profileFormHtml(p) + '</div><div id="targets-preview">' + targetsPreviewHtml(p) + '</div>'
     + '<button class="btn primary block" id="onb-go" data-act="onb-save" disabled>Start tracking</button>'
     + '<p class="small muted">Targets use Mifflin-St Jeor (or Katch-McArdle with body fat), an activity multiplier, and about 500 calories per pound per week of change. You can override any number later in Me.</p>';
 }
@@ -71,20 +71,21 @@ export function meHtml() {
   const storage = S.mode === 'db' ? 'Saved to your Claude account' : S.mode === 'pending' ? 'Connecting…' : 'Saved on this device only';
   const aiLine = S.ai.sample ? ('Label scanning (Nutrition Facts and Supplement Facts) and meal estimates run on your Claude account' + (S.ai.images ? '.' : ' (photos not available in this view).')) : 'Open this page inside Claude to scan labels and estimate meals.';
   const stack = stackFoods();
-  let h = '<section class="stack"><div class="sec-h"><h2>Stats and goal</h2></div>' + profileFormHtml(p) + '<div id="targets-preview">' + targetsPreviewHtml(p) + '</div>'
+  let h = '<section class="stack"><div class="sec-h"><h2>Stats and goal</h2></div><div class="card">' + profileFormHtml(p) + '</div><div id="targets-preview">' + targetsPreviewHtml(p) + '</div>'
     + '<div class="btnrow"><button class="btn primary" data-act="me-save">Save and recalculate</button></div>'
     + (p.custom ? '<div class="note warn">You are using custom targets. Saving here replaces them with recalculated ones.</div>' : '') + '</section>';
-  h += '<section class="stack"><div class="sec-h"><h2>Targets in use</h2><button class="link" data-act="edit-targets">Edit</button></div><div>';
+  h += '<section class="stack"><div class="sec-h"><h2>Targets in use</h2><button class="link" data-act="edit-targets">Edit</button></div><div class="card" style="padding-block:4px">';
   NUTR.forEach(m => { if (m.noTarget) return; h += '<div class="kv"><span class="k">' + m.label + (m.max ? ' (max)' : '') + '</span><span class="v num">' + fmt(T[m.k], m.dp) + (m.unit ? ' ' + m.unit : '') + '</span></div>'; });
   h += '</div></section>';
-  h += '<section class="stack"><div class="sec-h"><h2>Scanning</h2></div><div class="note">' + esc(aiLine) + '</div>'
-    + '<div class="toggle"><div><div style="font-weight:600">Careful mode</div><div class="small muted">Slower, more thorough label reading. Off means fast.</div></div><button class="sw ' + (p.careful ? 'on' : '') + '" data-act="toggle-careful" role="switch" aria-checked="' + (p.careful ? 'true' : 'false') + '" aria-label="Careful mode"></button></div></section>';
-  h += '<section class="stack"><div class="sec-h"><h2>Supplements</h2><button class="link" data-act="foods-supp">Manage</button></div>'
+  h += '<section class="stack"><div class="sec-h"><h2>Scanning</h2></div><div class="card" style="padding-block:4px">'
+    + '<div class="toggle"><div><div style="font-weight:600">Careful mode</div><div class="small muted">Slower, more thorough label reading. Off means fast.</div></div><button class="sw ' + (p.careful ? 'on' : '') + '" data-act="toggle-careful" role="switch" aria-checked="' + (p.careful ? 'true' : 'false') + '" aria-label="Careful mode"></button></div></div>'
+    + '<p class="hint">' + esc(aiLine) + '</p></section>';
+  h += '<section class="stack"><div class="sec-h"><h2>Supplements</h2><button class="link" data-act="foods-supp">Manage</button></div><div class="card" style="padding-block:4px">'
     + '<div class="toggle"><div><div style="font-weight:600">Log my stack automatically</div><div class="small muted">Adds your daily stack to Today the first time you open the app each day.</div></div><button class="sw ' + (p.autoStack ? 'on' : '') + '" data-act="toggle-autostack" role="switch" aria-checked="' + (p.autoStack ? 'true' : 'false') + '" aria-label="Log stack automatically"></button></div>'
-    + (stack.length ? '<div>' + stack.map(f => '<div class="kv"><span class="k">' + esc(f.name) + '</span><span class="v num">' + fmtQty(f.stackQty) + ' × ' + esc(f.servingLabel || 'serving') + '</span></div>').join('') + '</div>' : '<div class="note">No stack yet. Scan a Supplement Facts label from Add → Scan, then mark it "In daily stack".</div>')
-    + '</section>';
-  h += '<section class="stack"><div class="sec-h"><h2>Data</h2><span class="meta">build ' + esc(VERSION) + '</span></div><div class="kv"><span class="k">Storage</span><span class="v">' + esc(storage) + '</span></div>'
-    + '<div class="kv"><span class="k">Foods / meals / days</span><span class="v num">' + Object.keys(S.foods).length + ' / ' + Object.keys(S.meals).length + ' / ' + Object.keys(S.days).length + '</span></div>'
-    + '<div class="btnrow"><button class="btn ghost" data-act="export">Copy backup</button><button class="btn danger" data-act="reset">Reset everything</button></div></section>';
+    + (stack.length ? stack.map(f => '<div class="kv"><span class="k">' + esc(f.name) + '</span><span class="v num">' + fmtQty(f.stackQty) + ' × ' + esc(f.servingLabel || 'serving') + '</span></div>').join('') : '<div class="kv"><span class="k muted">No stack yet. Scan a Supplement Facts label and mark it "In daily stack".</span></div>')
+    + '</div></section>';
+  h += '<section class="stack"><div class="sec-h"><h2>Data</h2><span class="meta">build ' + esc(VERSION) + '</span></div><div class="card" style="padding-block:4px"><div class="kv"><span class="k">Storage</span><span class="v">' + esc(storage) + '</span></div>'
+    + '<div class="kv"><span class="k">Foods / meals / days</span><span class="v num">' + Object.keys(S.foods).length + ' / ' + Object.keys(S.meals).length + ' / ' + Object.keys(S.days).length + '</span></div></div>'
+    + '<div class="btnrow"><button class="btn" data-act="export">Copy backup</button><button class="btn danger" data-act="reset">Reset everything</button></div></section>';
   return h;
 }

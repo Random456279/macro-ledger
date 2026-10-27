@@ -14,7 +14,7 @@ export function openAdd(slot) {
   const body = '<input class="search" id="addSearch" type="search" placeholder="Search foods and basics" autocomplete="off">'
     + '<div class="chips scroll" id="addChips"></div>'
     + '<div class="grid3"><button class="btn sm" data-act="scan">' + ICON.camera + ' Scan</button><button class="btn sm" data-act="describe">' + ICON.pen + ' Describe</button><button class="btn sm" data-act="new-manual">' + ICON.type + ' Manual</button></div>'
-    + '<div class="list" id="addList"></div>';
+    + '<div class="list card" id="addList"></div>';
   const el = openSheet(sheetFrame('Add to ' + SLOT_LABEL[S.addSlot], body), { name: 'add' });
   $('#addSearch', el).addEventListener('input', e => { S.addQuery = e.target.value; renderAddList(); });
   renderAddList();
