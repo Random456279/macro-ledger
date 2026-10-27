@@ -21,9 +21,10 @@ anywhere after setup; every push to `main` goes live in about a minute.
 
    Click **Deploy**. The first build takes a minute or two; the app appears at
    `https://macro-ledger.<your-subdomain>.workers.dev`.
-3. **Add the AI key.** On the Worker's page → Settings → **Variables and Secrets** → Add → Type **Secret** →
-   name `ANTHROPIC_API_KEY` → paste the key → Deploy. (Scanning works from the next request; everything else
-   works without it.)
+3. **Add the AI key.** On the Worker's page → Settings → right-hand list **Bindings** → the **Variables and Secrets**
+   block at the top of the page (not the one under Builds, which only feeds the build machine) → Add → Type **Secret** →
+   name `ANTHROPIC_API_KEY` → paste the key → **Deploy** in the bar that appears. Scanning works from the next request;
+   everything else works without it.
 4. **Phone.** Open the URL in Safari, paste your device key when asked, then Share → **Add to Home Screen**.
 5. **Move your data.** In the old claude.ai version: Me → Copy backup. In the new one: Me → Import backup → paste.
 
