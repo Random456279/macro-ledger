@@ -1,4 +1,4 @@
-# Cloudflare config for the standalone Macro Ledger. tools/setup.mjs fills in database_id.
+# Cloudflare config for the standalone Macro Ledger. Deployed by Cloudflare Workers Builds on every push to main.
 name = "macro-ledger"
 main = "worker/index.js"
 compatibility_date = "2025-09-01"
@@ -10,7 +10,7 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "macro-ledger"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "65df8015-9a81-401a-b69d-ddfe47252875"
 
 [vars]
 MODEL_QUICK = "claude-haiku-5-5"
