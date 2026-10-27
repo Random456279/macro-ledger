@@ -60,6 +60,8 @@ async def main():
         await pg.screenshot(path=str(OUT / 'workout-start.png'))
         await pg.click('nav.tabs button.add'); await pg.wait_for_timeout(350)
         await pg.screenshot(path=str(OUT / 'exercise-picker.png'))
+        await pg.evaluate("document.querySelector('.scrim .sheet-b').scrollTop = 900"); await pg.wait_for_timeout(150)
+        await pg.screenshot(path=str(OUT / 'exercise-picker-scrolled.png'))
         await pg.click('[data-act="ex-pick"][data-id="bench"]'); await pg.wait_for_timeout(250)
         await pg.fill('.set input[data-si="0"][data-f="w"]', '185'); await pg.fill('.set input[data-si="0"][data-f="r"]', '8')
         await pg.click('[data-act="w-set-done"][data-si="0"]'); await pg.wait_for_timeout(100)

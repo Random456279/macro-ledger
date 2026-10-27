@@ -20,6 +20,10 @@
 html { color-scheme: light; }
 img { max-width: 100%; }
 [hidden] { display: none !important; }
+/* iOS 26.0 lays out an installed web app's viewport short by the status bar height (WebKit 301108, fixed in 26.1),
+   so fixed chrome stops above the home indicator. A page at least as tall as the screen gets the full viewport back;
+   the min() keeps it from becoming scrollable once the viewport is right. */
+@media (display-mode: standalone) { html { min-height: min(100lvh, calc(100% + env(safe-area-inset-top, 0px))); } }
 /* Standalone runs edge to edge under the status bar and home indicator; pad the fixed chrome, not the page. */
 header.top { padding-top: calc(18px + env(safe-area-inset-top, 0px)) !important; }
 nav.tabs { padding-bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) - 10px)) !important; }
