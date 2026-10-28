@@ -83,6 +83,7 @@ request a re-render without importing the UI.
 | 3 | `store.js` | localStorage mirror, `commit`, artifact db subscriptions, API mode with outbox, import | state, util, ui, backend |
 | 4 | `foods.js` | My Foods and Meals CRUD, search, sort, Basics materialization, stack list | state, store, basics, util |
 | 5 | `log.js` | day docs, totals, entries, log/edit/remove/copy, stack logging and auto-log | state, store, nutrients, util, foods, ui |
+| 5 | `weight.js` | morning weigh-ins on day docs, 7-day average and weekly change, sparkline | state, store, log, util |
 | 5 | `workouts.js` | sessions, sets (debounced save), finish/reopen, favorites (templates), last performance, custom exercises | state, store, util, exercises, ui |
 | 6 | `sheet-food.js` | food form (new, edit, AI-filled) read/write | util, nutrients, ui |
 | 6 | `sheet-misc.js` | targets editor, confirm sheet | util, nutrients, targets, ui |
@@ -99,7 +100,7 @@ request a re-render without importing the UI.
 | 9 | `main.js` | `render`, header and tabs, event routing, boot | everything |
 
 Planned modules (not yet written; create them at layer 7 and register in `actions.js`/`main.js`):
-`suggest.js` (what closes today's gap), `trends.js` (weight log, rolling averages, weekly review).
+`suggest.js` (what closes today's gap), `trends.js` (weekly review and adaptive targets, building on `weight.js`).
 
 ## Conventions
 
@@ -151,7 +152,7 @@ meal  (u/<uid>/meals/<id>)
   id, name, items [{foodId, qty}], fav, rating, count, last, created, updated
 
 day  (u/<uid>/days/<yyyy-mm-dd>)
-  date, stackLogged (bool), entries [entry]
+  date, stackLogged (bool), weight (lb, morning weigh-in; absent when not logged), entries [entry]
   entry: id, foodId, name, brand, restaurant, servingLabel, servingGrams, kind, qty (servings),
          amount {v, unit 'g'|'oz'|'lb'}|null (what was typed), n (per-serving vector frozen at log time), extras (copied from the food),
          slot 'breakfast'|'lunch'|'dinner'|'snack'|'supplement', t, mealId?

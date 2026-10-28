@@ -13,7 +13,8 @@ import { openAdd, renderAddList } from './sheet-add.js';
 import { openQty, addFromQty, openEntry } from './sheet-qty.js';
 import { openFoodForm, readFoodForm, extraRowHtml } from './sheet-food.js';
 import { openMealBuilder, openMeal } from './sheet-meal.js';
-import { openTargetsEditor, openConfirm, toggleDetails, openSlotMenu, openKeySheet, openImportSheet } from './sheet-misc.js';
+import { openTargetsEditor, openConfirm, toggleDetails, openSlotMenu, openKeySheet, openImportSheet, openWeightSheet } from './sheet-misc.js';
+import { logWeight } from './weight.js';
 import { openDescribe, submitDescribe } from './ai.js';
 import { aiAvailable, imagesAvailable, saveKey, clearKey, apiMe, API } from './backend.js';
 import { connectApi, importBackup, flushOutbox } from './store.js';
@@ -121,6 +122,13 @@ export const ACT = {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(data).then(done).catch(fallback); else fallback();
   },
   reset() { openConfirm('Reset everything?', 'This deletes your profile, foods, meals and every logged day from this app. There is no undo.', 'Delete it all', doReset); },
+
+  /* weigh-ins */
+  weigh(b) { openWeightSheet(b.dataset.date || S.dayKey); },
+  'weigh-today'() { openWeightSheet(ymd(new Date())); },
+  'weigh-step'(b) { const i = $('#wtInput', topSheet()); const v = Math.round((num(i.value) + Number(b.dataset.d)) * 10) / 10; i.value = v > 0 ? v : ''; },
+  'weigh-save'() { const el = topSheet(); const v = num($('#wtInput', el).value); if (!(v > 0)) { toast('Enter a weight'); return; } logWeight(el._dayKey, v); closeSheet(); render(); toast('Logged ' + v + ' lb'); },
+  'weigh-clear'() { const el = topSheet(); logWeight(el._dayKey, null); closeSheet(); render(); },
 
   /* workouts */
   'w-start-blank'() { startWorkout(S.dayKey); render(); },

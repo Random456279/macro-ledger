@@ -6,6 +6,15 @@ import { NUTR, NMETA, SHORT, scaled } from './nutrients.js';
 import { activeTargets } from './targets.js';
 import { getDay, dayTotals, dayExtras, entryAmountText } from './log.js';
 import { stackFoods } from './foods.js';
+import { dayWorkouts } from './workouts.js';
+
+/* One quiet line under the calories card: the day's weigh-in and the name of its workout. */
+function dayStripHtml(key, day) {
+  const wk = dayWorkouts(key);
+  const left = day.weight > 0 ? '<button class="link" data-act="weigh" data-date="' + key + '"><span class="num">' + fmtQty(day.weight) + '</span> lb</button>' : '<button class="link muted" data-act="weigh" data-date="' + key + '">Log weight</button>';
+  const right = wk.length ? '<button class="link" data-act="tab" data-tab="workout">' + esc(wk.map(w => w.name).join(' · ')) + ' ›</button>' : '';
+  return '<div class="daystrip">' + left + right + '</div>';
+}
 
 export function goalWord() {
   const p = S.profile; if (!p) return '';
@@ -34,6 +43,7 @@ export function todayHtml() {
     + '<div class="macros">' + macro('protein', 'Protein') + macro('carbs', 'Carbs') + macro('fat', 'Fat') + '</div>'
     + '<div class="hero-foot"><span class="goal">' + esc(goalWord()) + (count ? ' · ' + count + ' item' + (count === 1 ? '' : 's') : '') + '</span><button class="link" data-act="toggle-full">Details</button></div>'
     + '</section>';
+  h += dayStripHtml(key, day);
 
   const yKey = ymd(addDays(parseYmd(key), -1)); const y = S.days[yKey];
   if (!count && y && (y.entries || []).length) {

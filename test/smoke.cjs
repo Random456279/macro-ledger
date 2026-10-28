@@ -207,6 +207,26 @@ async function runLocal() {
   d.querySelector('[data-act="confirm-yes"]').click(); await tick(2);
   assert(d.querySelector('[data-act="w-start-blank"]') && !d.querySelector('.card.wk'), 'workout deleted');
   d.querySelector('[data-act="day-today"]').click(); await tick(2);
+  // Today: the strip names the day's workout (no numbers) and takes a weigh-in
+  d.querySelector('nav.tabs button[data-tab="today"]').click(); await tick(2);
+  const strip = d.querySelector('.daystrip'); assert(strip && strip.textContent.includes('Push day') && !strip.textContent.includes('sets'), 'Today strip names the workout only');
+  strip.querySelector('[data-tab="workout"]').click(); await tick(2);
+  assert(d.querySelector('.card.wk'), 'strip link opens the Workout tab for the same day');
+  d.querySelector('nav.tabs button[data-tab="today"]').click(); await tick(2);
+  d.querySelector('[data-act="weigh"]').click(); await tick(2);
+  assert(d.querySelector('#wtInput') && d.querySelector('#wtInput').value === '180', 'weigh sheet prefilled from profile weight');
+  d.querySelector('[data-act="weigh-step"][data-d="0.2"]').click(); assert(d.querySelector('#wtInput').value === '180.2', 'stepper adds 0.2');
+  d.querySelector('#wtInput').value = '181.4';
+  d.querySelector('[data-act="weigh-save"]').click(); await tick(2);
+  assert(!d.querySelector('.scrim') && d.querySelector('.daystrip').textContent.includes('181.4'), 'weigh-in shows on Today');
+  d.querySelector('[data-act="day"][data-n="1"]').click(); await tick(2);
+  assert(d.querySelector('.daystrip').textContent.includes('Log weight'), 'next day has its own weigh-in line');
+  d.querySelector('[data-act="weigh"]').click(); await tick(2);
+  assert(d.querySelector('#wtInput').value === '181.4', 'next day prefills from the latest weigh-in');
+  d.querySelector('#wtInput').value = '180.8'; d.querySelector('[data-act="weigh-save"]').click(); await tick(2);
+  d.querySelector('[data-act="day-today"]').click(); await tick(2);
+  d.querySelector('nav.tabs button[data-tab="me"]').click(); await tick(2);
+  assert(d.querySelector('.w-big') && d.querySelector('[data-act="weigh-today"]'), 'Me shows the weight section');
   // me tab render + targets editor
   d.querySelector('nav.tabs button[data-tab="me"]').click(); await tick(2);
   assert(d.querySelector('[data-act="edit-targets"]'), 'me tab rendered');

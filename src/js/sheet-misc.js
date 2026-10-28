@@ -1,11 +1,13 @@
 /* Small sheets: the day's Details, the targets editor, the per-slot menu, and the in-page confirm
    (the viewer shows no native confirm()). */
-import { esc } from './util.js';
+import { $, esc, ymd, niceDate } from './util.js';
 import { NUTR } from './nutrients.js';
 import { SLOT_LABEL } from './state.js';
 import { activeTargets } from './targets.js';
 import { openSheet, sheetFrame, topSheetNamed, closeSheet } from './ui.js';
 import { detailsHtml } from './view-today.js';
+import { getDay } from './log.js';
+import { latestWeight } from './weight.js';
 
 /* Details is a toggle: a second tap (or the test's second click) closes it. */
 export function toggleDetails() {
@@ -44,4 +46,16 @@ export function openTargetsEditor() {
 export function openConfirm(title, text, cta, onYes) {
   const el = openSheet(sheetFrame(title, '<p>' + esc(text) + '</p>', '<button class="btn" data-act="close">Cancel</button><button class="btn danger" data-act="confirm-yes">' + esc(cta) + '</button>'), { name: 'confirm' });
   el._onYes = onYes;
+}
+
+/* Morning weigh-in for one day. Prefilled with that day's value, else the most recent one. */
+export function openWeightSheet(dayKey) {
+  const day = getDay(dayKey); const cur = day.weight > 0 ? day.weight : null; const last = latestWeight(dayKey);
+  const isToday = dayKey === ymd(new Date());
+  const body = '<div class="stepper"><button type="button" data-act="weigh-step" data-d="-0.2" aria-label="Less">−</button><input id="wtInput" class="num" type="number" inputmode="decimal" step="0.1" min="0" value="' + (cur !== null ? cur : last ? last.lb : '') + '" placeholder="lb"><button type="button" data-act="weigh-step" data-d="0.2" aria-label="More">+</button></div>'
+    + '<p class="hint">Pounds, first thing in the morning. One day bounces around; the 7-day average in Me is the number to watch.</p>';
+  const foot = (cur !== null ? '<button class="btn" data-act="weigh-clear">Clear</button>' : '') + '<button class="btn primary" data-act="weigh-save">Save</button>';
+  const el = openSheet(sheetFrame('Weight · ' + (isToday ? 'Today' : niceDate(dayKey)), body, foot), { name: 'weigh' });
+  el._dayKey = dayKey;
+  setTimeout(() => { const i = $('#wtInput', el); if (i) { i.focus(); i.select(); } }, 60);
 }

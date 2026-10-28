@@ -1,6 +1,7 @@
 /* The profile form (shared by onboarding and the Me tab), the onboarding screen, and the Me tab. */
 import { S, ACTIVITY, VERSION } from './state.js';
-import { $, esc, fmt, fmtQty, numOrNull } from './util.js';
+import { $, esc, fmt, fmtQty, numOrNull, shortDate } from './util.js';
+import { weightStats, goalPerWeek, signed, sparklineSvg } from './weight.js';
 import { NUTR } from './nutrients.js';
 import { calcTargets, profileComplete, activeTargets } from './targets.js';
 import { stackFoods } from './foods.js';
@@ -68,13 +69,27 @@ export function onboardingHtml(p) {
     + '<button class="btn primary block" id="onb-go" data-act="onb-save" disabled>Start tracking</button>'
     + '<p class="small muted">Targets use Mifflin-St Jeor (or Katch-McArdle with body fat), an activity multiplier, and about 500 calories per pound per week of change. You can override any number later in Me.</p>';
 }
+function weightSectionHtml() {
+  const st = weightStats(); const goal = goalPerWeek();
+  let h = '<section class="stack"><div class="sec-h"><h2>Weight</h2><button class="link" data-act="weigh-today">Log today</button></div><div class="card">';
+  if (!st.latest) return h + '<div class="empty" style="padding:10px 0">Log your morning weight from Today. After a week the trend shows up here.</div></div></section>';
+  const big = st.n7 ? st.avg7 : st.latest.lb;
+  h += '<div class="label">' + (st.n7 ? '7-day average' : 'Latest') + '</div><div class="w-big num">' + big.toFixed(1) + '<small>lb</small></div>';
+  const trend = st.perWeek !== null ? '<b class="num">' + signed(st.perWeek) + ' lb/wk</b> vs the week before' : st.n7 >= 2 ? 'Keep logging; the weekly change needs two weeks.' : 'Keep logging; the weekly change needs a few more days.';
+  h += '<div class="small muted" style="margin-top:4px">' + trend + (goal ? ' · goal ' + signed(goal) + '/wk' : ' · goal hold') + '</div>';
+  h += sparklineSvg(st.series);
+  h += '<div class="kv" style="border-top:1px solid var(--line);margin-top:8px"><span class="k">Latest</span><span class="v num">' + st.latest.lb.toFixed(1) + ' lb · ' + esc(shortDate(st.latest.date)) + '</span></div>';
+  return h + '</div></section>';
+}
+
 export function meHtml() {
   const p = S.profile; const T = activeTargets();
+  let h = weightSectionHtml();
   const pend = outboxSize();
   const storage = S.mode === 'db' ? 'Saved to your Claude account' : S.mode === 'api' ? (API.online ? 'Synced to your server' + (pend ? ' (' + pend + ' pending)' : '') : 'Offline, ' + pend + ' change' + (pend === 1 ? '' : 's') + ' waiting to sync') : S.mode === 'pending' ? 'Connecting…' : 'Saved on this device only';
   const aiLine = S.ai.sample ? ('Label scanning (Nutrition Facts and Supplement Facts) and meal estimates run on your Claude account' + (S.ai.images ? '.' : ' (photos not available in this view).')) : aiAvailable() ? 'Label scanning and meal estimates run through your own server and API key.' : isStandalone() ? 'Connect this device (Me → Data) to scan labels and estimate meals.' : 'Open this page inside Claude to scan labels and estimate meals.';
   const stack = stackFoods();
-  let h = '<section class="stack"><div class="sec-h"><h2>Stats and goal</h2></div><div class="card">' + profileFormHtml(p) + '</div><div id="targets-preview">' + targetsPreviewHtml(p) + '</div>'
+  h += '<section class="stack"><div class="sec-h"><h2>Stats and goal</h2></div><div class="card">' + profileFormHtml(p) + '</div><div id="targets-preview">' + targetsPreviewHtml(p) + '</div>'
     + '<div class="btnrow"><button class="btn primary" data-act="me-save">Save and recalculate</button></div>'
     + (p.custom ? '<div class="note warn">You are using custom targets. Saving here replaces them with recalculated ones.</div>' : '') + '</section>';
   h += '<section class="stack"><div class="sec-h"><h2>Targets in use</h2><button class="link" data-act="edit-targets">Edit</button></div><div class="card" style="padding-block:4px">';

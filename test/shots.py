@@ -27,6 +27,16 @@ SEED = {
     {"id":"e1","foodId":"f1","name":"Chobani Greek Yogurt, Vanilla","servingLabel":"1 cup (227 g)","qty":1,"slot":"breakfast","n":N(kcal=190,protein=16,carbs=23,fat=4,sugar=20,addedSugar=14,satFat=2.5,cholesterol=15,sodium=75,potassium=280,calcium=200)},
     {"id":"e3","foodId":"f2","name":"Chicken burrito bowl","restaurant":"Chipotle","servingLabel":"1 bowl as served","qty":1,"slot":"lunch","n":N(kcal=840,protein=52,carbs=92,fat=28,fiber=14,sugar=5,satFat=9,cholesterol=140,sodium=1900,potassium=1200,calcium=300,iron=5)}]}},
   "tab": "today"}
+# Two weeks of morning weigh-ins trending down about a pound a week, plus a workout today, so Today's strip and Me's Weight section have something to show.
+import datetime, random
+random.seed(3)
+for k in range(1, 15):
+    d = (datetime.date.today() - datetime.timedelta(days=k)).isoformat()
+    SEED["days"].setdefault(d, {"date": d, "entries": []})["weight"] = round(183.6 - (14 - k) * 0.14 + random.uniform(-0.6, 0.6), 1)
+SEED["days"][today]["weight"] = 181.4
+SEED["workouts"] = {today + "_seed": {"id": today + "_seed", "date": today, "name": "Push day", "started": int(time.time() * 1000) - 3600000, "finished": int(time.time() * 1000), "templateId": None, "note": "",
+  "items": [{"id": "i1", "exId": "bench", "name": "Bench Press", "type": "weight", "sets": [{"w": 185, "r": 8, "done": True}, {"w": 185, "r": 8, "done": True}, {"w": 185, "r": 7, "done": True}]},
+            {"id": "i2", "exId": "incline-db", "name": "Incline Dumbbell Press", "type": "weight", "sets": [{"w": 65, "r": 10, "done": True}, {"w": 65, "r": 10, "done": True}, {"w": 65, "r": 9, "done": True}]}]}}
 
 async def main():
     os.chdir(WWW)
@@ -57,6 +67,8 @@ async def main():
         await pg.click('[data-act="foods-sort"][data-sort="meals"]'); await pg.wait_for_timeout(200)
         await pg.screenshot(path=str(OUT / 'foods-meals.png'))
         await pg.click('nav.tabs button[data-tab="workout"]'); await pg.wait_for_timeout(200)
+        await pg.screenshot(path=str(OUT / 'workout-done.png'))
+        await pg.click('[data-act="day"][data-n="1"]'); await pg.wait_for_timeout(200)
         await pg.screenshot(path=str(OUT / 'workout-start.png'))
         await pg.click('nav.tabs button.add'); await pg.wait_for_timeout(350)
         await pg.screenshot(path=str(OUT / 'exercise-picker.png'))

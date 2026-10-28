@@ -230,6 +230,16 @@ nav.tabs button.add span.plus svg { width: 22px; height: 22px; }
 .sw.on::after { transform: translateX(18px); }
 
 /* Toast, misc */
+/* Day strip under the calories card: weigh-in on the left, the day's workout on the right */
+.daystrip { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 0 8px; margin-top: -8px; min-height: 20px; }
+.daystrip .link { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.daystrip .link.muted { color: var(--ink-3); }
+
+/* Weight section in Me */
+.w-big { font-size: 34px; font-weight: 300; letter-spacing: -.03em; line-height: 1; margin-top: 4px; }
+.w-big small { font-size: 14px; font-weight: 500; color: var(--ink-3); margin-left: 6px; letter-spacing: 0; }
+.spark { display: block; width: 100%; height: 44px; margin-top: 14px; }
+
 /* Workout: one card per session, exercises stacked inside, sets as a tappable grid */
 .wk .ex { padding: 14px 0 6px; border-top: 1px solid var(--line); }
 .exs .ex:first-child { border-top: 0; padding-top: 6px; }
